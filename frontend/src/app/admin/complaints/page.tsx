@@ -121,18 +121,18 @@ export default function AdminComplaintsPage() {
                         </p>
                       </td>
                       <td className="py-3.5 px-4 sm:px-6">
-                        <span className="font-semibold text-navy-900 block">{c.customer.name}</span>
-                        <span className="text-[11px] text-slate-400">{c.customer.phone}</span>
+                        <span className="font-semibold text-navy-900 block">{c.customer?.name || 'Customer'}</span>
+                        <span className="text-[11px] text-slate-400">{c.customer?.phone || 'N/A'}</span>
                       </td>
                       <td className="py-3.5 px-4 sm:px-6">
                         <Link
                           href={`/admin/requests/${c.requestId}`}
                           className="font-mono font-bold text-brand-orange hover:underline block"
                         >
-                          {c.request.requestNumber}
+                          {c.request?.requestNumber || 'REQ'}
                         </Link>
                         <span className="text-[11px] text-slate-500">
-                          {c.request.vehicle.make} {c.request.vehicle.model}
+                          {c.request?.vehicle?.make || 'Vehicle'} {c.request?.vehicle?.model || ''}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 sm:px-6 text-slate-500">

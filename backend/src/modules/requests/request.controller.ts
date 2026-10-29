@@ -137,6 +137,40 @@ export async function listRequests(req: AuthenticatedRequest, res: Response, nex
   }
 }
 
+export const FULL_REQUEST_INCLUDE = {
+  vehicle: true,
+  garage: true,
+  customer: { select: { id: true, name: true, email: true, phone: true } },
+  mechanic: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      mechanicProfile: true,
+    },
+  },
+  statusHistory: {
+    orderBy: { createdAt: 'asc' as const },
+    include: { actor: { select: { id: true, name: true, role: true } } },
+  },
+  estimates: {
+    orderBy: { version: 'desc' as const },
+    include: {
+      items: { orderBy: { kind: 'asc' as const } },
+    },
+  },
+  invoice: {
+    include: { payment: true },
+  },
+  payment: true,
+  review: true,
+  complaints: {
+    orderBy: { createdAt: 'desc' as const },
+    include: { resolvedBy: { select: { id: true, name: true } } },
+  },
+};
+
 export async function getRequestById(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     if (!req.user) {
@@ -148,39 +182,7 @@ export async function getRequestById(req: AuthenticatedRequest, res: Response, n
 
     const request = await prisma.repairRequest.findUnique({
       where: { id },
-      include: {
-        vehicle: true,
-        garage: true,
-        customer: { select: { id: true, name: true, email: true, phone: true } },
-        mechanic: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-            mechanicProfile: true,
-          },
-        },
-        statusHistory: {
-          orderBy: { createdAt: 'asc' },
-          include: { actor: { select: { id: true, name: true, role: true } } },
-        },
-        estimates: {
-          orderBy: { version: 'desc' },
-          include: {
-            items: { orderBy: { kind: 'asc' } },
-          },
-        },
-        invoice: {
-          include: { payment: true },
-        },
-        payment: true,
-        review: true,
-        complaints: {
-          orderBy: { createdAt: 'desc' },
-          include: { resolvedBy: { select: { id: true, name: true } } },
-        },
-      },
+      include: FULL_REQUEST_INCLUDE,
     });
 
     if (!request) {
@@ -365,7 +367,7 @@ export async function assignMechanic(req: AuthenticatedRequest, res: Response, n
       return;
     }
 
-    const updated = await prisma.repairRequest.update({
+    await prisma.repairRequest.update({
       where: { id },
       data: {
         mechanicId: targetMechanicId,
@@ -380,18 +382,20 @@ export async function assignMechanic(req: AuthenticatedRequest, res: Response, n
           },
         },
       },
-      include: {
-        mechanic: { select: { id: true, name: true, phone: true } },
-        vehicle: true,
-        garage: true,
-      },
     });
 
-    emitRequestUpdated(updated.id, updated);
+    const fullUpdated = await prisma.repairRequest.findUnique({
+      where: { id },
+      include: FULL_REQUEST_INCLUDE,
+    });
+
+    if (fullUpdated) {
+      emitRequestUpdated(id, fullUpdated);
+    }
 
     res.json({
       message: `Mechanic ${mechanicUser.name} assigned successfully.`,
-      request: updated,
+      request: fullUpdated,
     });
   } catch (err) {
     next(err);
@@ -469,11 +473,6 @@ export async function transitionStatus(req: AuthenticatedRequest, res: Response,
         },
       },
       include: {
-        vehicle: true,
-        garage: true,
-        customer: { select: { id: true, name: true, email: true, phone: true } },
-        mechanic: { select: { id: true, name: true, phone: true } },
-        estimates: { include: { items: true } },
         invoice: true,
       },
     });
@@ -494,18 +493,12 @@ export async function transitionStatus(req: AuthenticatedRequest, res: Response,
 
     const finalRequest = await prisma.repairRequest.findUnique({
       where: { id },
-      include: {
-        vehicle: true,
-        garage: true,
-        customer: { select: { id: true, name: true, email: true, phone: true } },
-        mechanic: { select: { id: true, name: true, phone: true } },
-        estimates: { include: { items: true } },
-        invoice: true,
-        payment: true,
-      },
+      include: FULL_REQUEST_INCLUDE,
     });
 
-    emitRequestUpdated(id, finalRequest);
+    if (finalRequest) {
+      emitRequestUpdated(id, finalRequest);
+    }
 
     res.json({
       message: `Status updated to ${targetStatus}${invoiceCreated ? ' (Invoice generated)' : ''}`,
@@ -537,14 +530,25 @@ export async function updateDiagnosis(req: AuthenticatedRequest, res: Response, 
       return;
     }
 
-    const updated = await prisma.repairRequest.update({
+    await prisma.repairRequest.update({
       where: { id },
       data: { diagnosis },
     });
 
-    emitRequestUpdated(id, updated);
+    const fullRequest = await prisma.repairRequest.findUnique({
+      where: { id },
+      include: FULL_REQUEST_INCLUDE,
+    });
 
-    res.json({ message: 'Diagnosis recorded successfully', diagnosis: updated.diagnosis });
+    if (fullRequest) {
+      emitRequestUpdated(id, fullRequest);
+    }
+
+    res.json({
+      message: 'Diagnosis recorded successfully',
+      diagnosis,
+      request: fullRequest,
+    });
   } catch (err) {
     next(err);
   }

@@ -68,7 +68,14 @@ export default function MechanicJobDetailPage() {
 
     const onRequestUpdated = (updated: any) => {
       if (updated.id === id) {
-        setJob(updated);
+        setJob((prev: any) => ({
+          ...prev,
+          ...updated,
+          customer: updated.customer || prev?.customer,
+          vehicle: updated.vehicle || prev?.vehicle,
+          estimates: updated.estimates || prev?.estimates,
+          statusHistory: updated.statusHistory || prev?.statusHistory,
+        }));
         success(`Live update: Request moved to ${updated.status}`);
       }
     };
@@ -179,7 +186,7 @@ export default function MechanicJobDetailPage() {
               <StatusBadge status={job.status} />
             </div>
             <p className="text-xs text-slate-500">
-              Vehicle: {job.vehicle.make} {job.vehicle.model} ({job.vehicle.regNo})
+              Vehicle: {job.vehicle?.make || 'Vehicle'} {job.vehicle?.model || ''} ({job.vehicle?.regNo || 'N/A'})
             </p>
           </div>
 
@@ -449,17 +456,17 @@ export default function MechanicJobDetailPage() {
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-navy-900">
-                    {job.vehicle.make} {job.vehicle.model}
+                    {job.vehicle?.make || 'Vehicle'} {job.vehicle?.model || ''}
                   </h4>
                   <p className="text-xs font-mono font-bold text-brand-orange">
-                    {job.vehicle.regNo}
+                    {job.vehicle?.regNo || 'N/A'}
                   </p>
                 </div>
               </div>
               <div className="pt-2 border-t border-slate-100 text-xs text-slate-600 space-y-1">
                 <div className="flex justify-between">
                   <span>Type:</span>
-                  <strong className="text-navy-900">{job.vehicle.type}</strong>
+                  <strong className="text-navy-900">{job.vehicle?.type || 'N/A'}</strong>
                 </div>
                 <div className="flex justify-between">
                   <span>Category:</span>
@@ -478,10 +485,12 @@ export default function MechanicJobDetailPage() {
                   <User className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-navy-900">{job.customer.name}</h4>
+                  <h4 className="text-sm font-bold text-navy-900">
+                    {job.customer?.name || 'Customer'}
+                  </h4>
                   <p className="text-xs text-slate-500 flex items-center gap-1">
                     <Phone className="w-3 h-3 text-slate-400" />
-                    {job.customer.phone}
+                    {job.customer?.phone || 'No phone provided'}
                   </p>
                 </div>
               </div>

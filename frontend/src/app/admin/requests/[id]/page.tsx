@@ -156,7 +156,7 @@ export default function AdminRequestDetailPage() {
               <StatusBadge status={request.status} />
             </div>
             <p className="text-xs text-slate-500">
-              Customer: {request.customer.name} ({request.customer.phone}) | Garage: {request.garage.name}
+              Customer: {request.customer?.name || 'Customer'} ({request.customer?.phone || 'No phone'}) | Garage: {request.garage?.name || 'Garage'}
             </p>
           </div>
         </div>
@@ -378,10 +378,10 @@ export default function AdminRequestDetailPage() {
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-navy-900">
-                    {request.vehicle.make} {request.vehicle.model}
+                    {request.vehicle?.make || 'Vehicle'} {request.vehicle?.model || ''}
                   </h4>
                   <p className="text-xs font-mono font-bold text-brand-orange">
-                    {request.vehicle.regNo}
+                    {request.vehicle?.regNo || 'N/A'}
                   </p>
                 </div>
               </div>
@@ -392,9 +392,9 @@ export default function AdminRequestDetailPage() {
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
                 Customer Details
               </span>
-              <p className="font-bold text-navy-900">{request.customer.name}</p>
-              <p className="text-slate-600">Email: {request.customer.email}</p>
-              <p className="text-slate-600">Phone: {request.customer.phone}</p>
+              <p className="font-bold text-navy-900">{request.customer?.name || 'Customer'}</p>
+              <p className="text-slate-600">Email: {request.customer?.email || 'N/A'}</p>
+              <p className="text-slate-600">Phone: {request.customer?.phone || 'N/A'}</p>
             </div>
 
             {/* Assigned Mechanic */}

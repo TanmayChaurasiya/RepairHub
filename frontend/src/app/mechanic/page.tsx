@@ -238,10 +238,10 @@ export default function MechanicDashboardPage() {
 
                   <div>
                     <h3 className="text-base font-black text-navy-900">
-                      {job.vehicle.make} {job.vehicle.model} ({job.vehicle.year})
+                      {job.vehicle?.make || 'Vehicle'} {job.vehicle?.model || ''} ({job.vehicle?.year || ''})
                     </h3>
                     <p className="text-xs text-slate-500 font-semibold">
-                      Reg: <span className="font-mono text-navy-900 font-bold">{job.vehicle.regNo}</span> | Category: <span className="text-brand-orange font-bold">{job.category}</span>
+                      Reg: <span className="font-mono text-navy-900 font-bold">{job.vehicle?.regNo || 'N/A'}</span> | Category: <span className="text-brand-orange font-bold">{job.category}</span>
                     </p>
                   </div>
 

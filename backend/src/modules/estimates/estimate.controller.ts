@@ -3,6 +3,7 @@ import { Role, RequestStatus, EstimateStatus } from '@prisma/client';
 import { prisma } from '../../config/db.js';
 import { AuthenticatedRequest } from '../../types/index.js';
 import { emitRequestUpdated } from '../../services/socket.js';
+import { FULL_REQUEST_INCLUDE } from '../requests/request.controller.js';
 
 export async function createOrSendEstimate(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -104,16 +105,12 @@ export async function createOrSendEstimate(req: AuthenticatedRequest, res: Respo
 
     const fullRequest = await prisma.repairRequest.findUnique({
       where: { id: requestId },
-      include: {
-        estimates: { include: { items: true }, orderBy: { version: 'desc' } },
-        statusHistory: { orderBy: { createdAt: 'asc' } },
-        vehicle: true,
-        customer: true,
-        mechanic: true,
-      },
+      include: FULL_REQUEST_INCLUDE,
     });
 
-    emitRequestUpdated(requestId, fullRequest);
+    if (fullRequest) {
+      emitRequestUpdated(requestId, fullRequest);
+    }
 
     res.status(201).json({
       message: `Estimate version ${newVersion} created and sent successfully`,
@@ -184,7 +181,7 @@ export async function decideEstimate(req: AuthenticatedRequest, res: Response, n
     });
 
     // Update request status & statusHistory
-    const updatedRequest = await prisma.repairRequest.update({
+    await prisma.repairRequest.update({
       where: { id: estimate.requestId },
       data: {
         status: newRequestStatus,
@@ -200,16 +197,16 @@ export async function decideEstimate(req: AuthenticatedRequest, res: Response, n
           },
         },
       },
-      include: {
-        estimates: { include: { items: true }, orderBy: { version: 'desc' } },
-        statusHistory: { orderBy: { createdAt: 'asc' } },
-        vehicle: true,
-        customer: true,
-        mechanic: true,
-      },
     });
 
-    emitRequestUpdated(estimate.requestId, updatedRequest);
+    const updatedRequest = await prisma.repairRequest.findUnique({
+      where: { id: estimate.requestId },
+      include: FULL_REQUEST_INCLUDE,
+    });
+
+    if (updatedRequest) {
+      emitRequestUpdated(estimate.requestId, updatedRequest);
+    }
 
     res.json({
       message: `Estimate ${isApproval ? 'approved' : 'rejected'} successfully`,
@@ -248,7 +245,7 @@ export async function reopenEstimate(req: AuthenticatedRequest, res: Response, n
       return;
     }
 
-    const updated = await prisma.repairRequest.update({
+    await prisma.repairRequest.update({
       where: { id: requestId },
       data: {
         status: RequestStatus.INSPECTING,
@@ -262,15 +259,16 @@ export async function reopenEstimate(req: AuthenticatedRequest, res: Response, n
           },
         },
       },
-      include: {
-        estimates: { include: { items: true }, orderBy: { version: 'desc' } },
-        statusHistory: { orderBy: { createdAt: 'asc' } },
-        vehicle: true,
-        mechanic: true,
-      },
     });
 
-    emitRequestUpdated(requestId, updated);
+    const updated = await prisma.repairRequest.findUnique({
+      where: { id: requestId },
+      include: FULL_REQUEST_INCLUDE,
+    });
+
+    if (updated) {
+      emitRequestUpdated(requestId, updated);
+    }
 
     res.json({
       message: 'Inspection reopened for estimate revision',

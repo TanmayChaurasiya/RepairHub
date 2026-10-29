@@ -459,10 +459,10 @@ export default function CustomerRequestDetailPage() {
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-navy-900">
-                    {request.vehicle.make} {request.vehicle.model}
+                    {request.vehicle?.make || 'Vehicle'} {request.vehicle?.model || ''}
                   </h4>
                   <p className="text-xs font-mono font-bold text-brand-orange">
-                    {request.vehicle.regNo}
+                    {request.vehicle?.regNo || 'N/A'}
                   </p>
                 </div>
               </div>
@@ -473,7 +473,7 @@ export default function CustomerRequestDetailPage() {
                 </div>
                 <div className="flex justify-between">
                   <span>Year:</span>
-                  <strong className="text-navy-900">{request.vehicle.year}</strong>
+                  <strong className="text-navy-900">{request.vehicle?.year || 'N/A'}</strong>
                 </div>
               </div>
             </div>

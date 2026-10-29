@@ -176,10 +176,10 @@ export default function AdminRequestsPage() {
                       </td>
                       <td className="py-3.5 px-4 sm:px-6">
                         <span className="font-bold text-navy-900 block">
-                          {req.vehicle.make} {req.vehicle.model}
+                          {req.vehicle?.make || 'Vehicle'} {req.vehicle?.model || ''}
                         </span>
                         <span className="text-[11px] font-mono font-semibold text-slate-500">
-                          {req.vehicle.regNo}
+                          {req.vehicle?.regNo || 'N/A'}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 sm:px-6">
