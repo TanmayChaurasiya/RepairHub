@@ -184,7 +184,7 @@ export default function LandingPage() {
       </section>
 
       {/* 9-Stage Workflow Section */}
-      <section id="workflow" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full space-y-12">
+      <section id="workflow" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full space-y-12 scroll-mt-20">
         <div className="text-center max-w-3xl mx-auto space-y-3">
           <span className="text-xs font-bold uppercase tracking-wider text-brand-orange">
             Strict State Machine
@@ -249,8 +249,181 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Platform Roles & Features Section */}
+      <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full space-y-12 scroll-mt-20">
+        <div className="text-center max-w-3xl mx-auto space-y-3">
+          <span className="text-xs font-bold uppercase tracking-wider text-brand-cyan">
+            Tailored Workspaces
+          </span>
+          <h2 className="text-3xl font-extrabold text-navy-900 tracking-tight">
+            One Connected Platform for All 3 Garage Roles
+          </h2>
+          <p className="text-sm text-slate-600">
+            RepairHub eliminates miscommunication with dedicated dashboards tailored for vehicle owners, mechanics, and workshop managers.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Role 1: Customer (Vehicle Owner) */}
+          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-hover transition-all flex flex-col overflow-hidden group">
+            <div className="p-8 bg-gradient-to-br from-emerald-500/10 via-slate-50 to-white border-b border-slate-100 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 shadow-sm">
+                  <Car className="w-6 h-6" />
+                </div>
+                <span className="text-[11px] font-extrabold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase tracking-wide">
+                  Vehicle Owners
+                </span>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-navy-900">Customer Portal</h3>
+                <p className="text-xs text-slate-500 mt-1">Total transparency, zero surprise bills & digital receipts.</p>
+              </div>
+            </div>
+
+            <div className="p-8 flex-1 flex flex-col justify-between space-y-6">
+              <ul className="space-y-3.5 text-xs text-slate-600">
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                  <span><strong>Multi-Vehicle Garage:</strong> Register your cars, bikes & commercial vehicles with instant RC details.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                  <span><strong>1-Click Estimate Approval:</strong> Review itemized parts & labour pricing. Work starts only after your consent.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                  <span><strong>Real-Time Bay Tracker:</strong> Live Socket.IO milestone updates from inspection to final QC.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                  <span><strong>PDF Tax Invoices & UPI:</strong> Test digital payments with instantly downloadable GST-compliant invoices.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                  <span><strong>Mechanic Ratings & History:</strong> Verified 5-star reviews and lifelong service records for resale value.</span>
+                </li>
+              </ul>
+
+              <div className="pt-4 border-t border-slate-100">
+                <Link
+                  href="/login?email=arun.customer@gmail.com"
+                  className="w-full py-3 rounded-xl bg-slate-900 hover:bg-emerald-600 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
+                >
+                  Explore Customer Experience <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Role 2: Mechanic (Bay Technician) */}
+          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-hover transition-all flex flex-col overflow-hidden group">
+            <div className="p-8 bg-gradient-to-br from-brand-cyan/15 via-slate-50 to-white border-b border-slate-100 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-2xl bg-brand-cyan/20 border border-brand-cyan/40 flex items-center justify-center text-cyan-700 shadow-sm">
+                  <Wrench className="w-6 h-6" />
+                </div>
+                <span className="text-[11px] font-extrabold px-3 py-1 rounded-full bg-cyan-100 text-cyan-800 border border-cyan-200 uppercase tracking-wide">
+                  Workshop Mechanics
+                </span>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-navy-900">Mechanic Bay Console</h3>
+                <p className="text-xs text-slate-500 mt-1">Focus on technical repair without messy paperwork.</p>
+              </div>
+            </div>
+
+            <div className="p-8 flex-1 flex flex-col justify-between space-y-6">
+              <ul className="space-y-3.5 text-xs text-slate-600">
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-brand-cyan mt-0.5 shrink-0" />
+                  <span><strong>Digital Job Cards:</strong> Automated dispatch with customer complaint details, vehicle specs & symptoms.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-brand-cyan mt-0.5 shrink-0" />
+                  <span><strong>Technical Diagnosis Logger:</strong> Enter diagnostic notes, OBD fault codes, and required component changes.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-brand-cyan mt-0.5 shrink-0" />
+                  <span><strong>Line-Item Estimate Builder:</strong> Draft transparent pricing with part numbers, quantities & labour units.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-brand-cyan mt-0.5 shrink-0" />
+                  <span><strong>1-Tap Status Progressions:</strong> Advance requests from Inspecting → In Progress → Quality Check.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-brand-cyan mt-0.5 shrink-0" />
+                  <span><strong>Availability & Skills Matrix:</strong> Set active status and configure expertise across Engine, Brakes & Electrical.</span>
+                </li>
+              </ul>
+
+              <div className="pt-4 border-t border-slate-100">
+                <Link
+                  href="/login?email=vikram.mechanic@repairhub.in"
+                  className="w-full py-3 rounded-xl bg-slate-900 hover:bg-cyan-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
+                >
+                  Launch Mechanic Console <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Role 3: Admin (Operations Tower) */}
+          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-hover transition-all flex flex-col overflow-hidden group">
+            <div className="p-8 bg-gradient-to-br from-brand-orange/15 via-slate-50 to-white border-b border-slate-100 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-2xl bg-brand-orange/20 border border-brand-orange/40 flex items-center justify-center text-brand-orange shadow-sm">
+                  <Building2 className="w-6 h-6" />
+                </div>
+                <span className="text-[11px] font-extrabold px-3 py-1 rounded-full bg-orange-100 text-orange-800 border border-orange-200 uppercase tracking-wide">
+                  Network Admins
+                </span>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-navy-900">Admin Operations Tower</h3>
+                <p className="text-xs text-slate-500 mt-1">Full control, automated assignments & financial oversight.</p>
+              </div>
+            </div>
+
+            <div className="p-8 flex-1 flex flex-col justify-between space-y-6">
+              <ul className="space-y-3.5 text-xs text-slate-600">
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-brand-orange mt-0.5 shrink-0" />
+                  <span><strong>Smart Assignment Algorithm:</strong> Pure rule-based ranking: Rating - (Workload × 0.5) + Skill Matching.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-brand-orange mt-0.5 shrink-0" />
+                  <span><strong>Live Bay Analytics:</strong> Real-time KPI dashboard tracking revenue, volume, average turnaround & CSAT.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-brand-orange mt-0.5 shrink-0" />
+                  <span><strong>Strict Audit Trail:</strong> Enforce 9-stage state machine transitions with zero skipped safety gates.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-brand-orange mt-0.5 shrink-0" />
+                  <span><strong>Kanpur Garage Verification:</strong> Onboard workshop partners, configure bay quotas & monitor capacity.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-brand-orange mt-0.5 shrink-0" />
+                  <span><strong>Customer Escalation Desk:</strong> Review and resolve complaints with end-to-end diagnosis logs.</span>
+                </li>
+              </ul>
+
+              <div className="pt-4 border-t border-slate-100">
+                <Link
+                  href="/login?email=admin@repairhub.in"
+                  className="w-full py-3 rounded-xl bg-slate-900 hover:bg-brand-orange text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
+                >
+                  Access Admin Tower <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Demo Logins Section */}
-      <section id="demo-logins" className="py-16 bg-navy-900 text-white px-4 sm:px-6 lg:px-8">
+      <section id="demo-logins" className="py-16 bg-navy-900 text-white px-4 sm:px-6 lg:px-8 scroll-mt-20">
         <div className="max-w-7xl mx-auto space-y-10">
           <div className="text-center space-y-2">
             <span className="text-xs font-bold uppercase tracking-wider text-brand-cyan">
