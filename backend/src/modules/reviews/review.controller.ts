@@ -3,6 +3,7 @@ import { RequestStatus } from '@prisma/client';
 import { prisma } from '../../config/db.js';
 import { AuthenticatedRequest } from '../../types/index.js';
 import { emitRequestUpdated } from '../../services/socket.js';
+import { FULL_REQUEST_INCLUDE } from '../requests/request.controller.js';
 
 export async function createReview(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -69,9 +70,20 @@ export async function createReview(req: AuthenticatedRequest, res: Response, nex
       }
     }
 
-    emitRequestUpdated(requestId, { ...request, review });
+    const fullRequest = await prisma.repairRequest.findUnique({
+      where: { id: requestId },
+      include: FULL_REQUEST_INCLUDE,
+    });
 
-    res.status(201).json({ message: 'Review submitted successfully', review });
+    if (fullRequest) {
+      emitRequestUpdated(requestId, fullRequest);
+    }
+
+    res.status(201).json({
+      message: 'Review submitted successfully',
+      review,
+      request: fullRequest,
+    });
   } catch (err) {
     next(err);
   }

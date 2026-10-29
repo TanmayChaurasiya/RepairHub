@@ -173,7 +173,7 @@ export default function AdminRequestDetailPage() {
                   Ranked Mechanic Recommendations ({request.category})
                 </h2>
                 <p className="text-xs text-slate-300">
-                  Filtered by certified skill match, verified garage in {request.garage.city}, and availability.
+                  Filtered by certified skill match, verified garage in {request.garage?.city || 'Kanpur'}, and availability.
                   Score formula: <span className="font-mono text-brand-orange">Rating − (Active Jobs × 0.5)</span>
                 </p>
               </div>
@@ -404,8 +404,8 @@ export default function AdminRequestDetailPage() {
               </span>
               {request.mechanic ? (
                 <>
-                  <p className="font-bold text-navy-900">{request.mechanic.name}</p>
-                  <p className="text-slate-600">Phone: {request.mechanic.phone}</p>
+                  <p className="font-bold text-navy-900">{request.mechanic.name || 'Mechanic'}</p>
+                  <p className="text-slate-600">Phone: {request.mechanic.phone || 'N/A'}</p>
                 </>
               ) : (
                 <span className="text-amber-600 font-bold">No mechanic currently assigned.</span>

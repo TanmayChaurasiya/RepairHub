@@ -4,6 +4,7 @@ import { prisma } from '../../config/db.js';
 import { AuthenticatedRequest } from '../../types/index.js';
 import { paymentProvider } from '../../services/payment/index.js';
 import { emitRequestUpdated } from '../../services/socket.js';
+import { FULL_REQUEST_INCLUDE } from '../requests/request.controller.js';
 
 export async function createPaymentOrder(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -151,14 +152,7 @@ export async function confirmPayment(req: AuthenticatedRequest, res: Response, n
           },
         },
       },
-      include: {
-        vehicle: true,
-        customer: true,
-        mechanic: true,
-        invoice: true,
-        payment: true,
-        statusHistory: true,
-      },
+      include: FULL_REQUEST_INCLUDE,
     });
 
     emitRequestUpdated(request.id, updated);

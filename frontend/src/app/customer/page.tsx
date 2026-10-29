@@ -51,7 +51,18 @@ export default function CustomerDashboardPage() {
 
     const onRequestUpdated = (updated: any) => {
       setRequests((prev) =>
-        prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r))
+        prev.map((r) =>
+          r.id === updated.id
+            ? {
+                ...r,
+                ...updated,
+                vehicle: updated.vehicle || r.vehicle,
+                garage: updated.garage || r.garage,
+                mechanic: updated.mechanic || r.mechanic,
+                estimates: updated.estimates || r.estimates,
+              }
+            : r
+        )
       );
     };
 
@@ -197,10 +208,10 @@ export default function CustomerDashboardPage() {
 
                   <div>
                     <h3 className="text-base font-black text-navy-900">
-                      {req.vehicle.make} {req.vehicle.model}
+                      {req.vehicle?.make || 'Vehicle'} {req.vehicle?.model || ''}
                     </h3>
                     <p className="text-xs font-semibold text-slate-500">
-                      Reg: {req.vehicle.regNo} | Category: <span className="text-brand-orange font-bold">{req.category}</span>
+                      Reg: {req.vehicle?.regNo || 'N/A'} | Category: <span className="text-brand-orange font-bold">{req.category}</span>
                     </p>
                   </div>
 
@@ -221,7 +232,7 @@ export default function CustomerDashboardPage() {
                   {req.mechanic && (
                     <div className="text-xs text-slate-500 flex items-center gap-1.5 pt-1">
                       <Wrench className="w-3.5 h-3.5 text-brand-cyan" />
-                      Assigned Mechanic: <strong className="text-navy-900">{req.mechanic.name}</strong>
+                      Assigned Mechanic: <strong className="text-navy-900">{req.mechanic.name || 'Assigned'}</strong>
                     </div>
                   )}
                 </div>
@@ -271,7 +282,7 @@ export default function CustomerDashboardPage() {
                         {req.requestNumber}
                       </td>
                       <td className="py-3.5 px-4 sm:px-6 font-medium text-slate-700">
-                        {req.vehicle.make} {req.vehicle.model} ({req.vehicle.regNo})
+                        {req.vehicle?.make || 'Vehicle'} {req.vehicle?.model || ''} ({req.vehicle?.regNo || 'N/A'})
                       </td>
                       <td className="py-3.5 px-4 sm:px-6">
                         <span className="font-semibold text-slate-600">{req.category}</span>

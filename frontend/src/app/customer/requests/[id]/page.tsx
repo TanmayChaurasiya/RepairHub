@@ -74,7 +74,19 @@ export default function CustomerRequestDetailPage() {
 
     const onRequestUpdated = (updated: any) => {
       if (updated.id === id) {
-        setRequest(updated);
+        setRequest((prev: any) => ({
+          ...prev,
+          ...updated,
+          garage: updated.garage || prev?.garage,
+          vehicle: updated.vehicle || prev?.vehicle,
+          customer: updated.customer || prev?.customer,
+          mechanic: updated.mechanic || prev?.mechanic,
+          estimates: updated.estimates || prev?.estimates,
+          statusHistory: updated.statusHistory || prev?.statusHistory,
+          invoice: updated.invoice || prev?.invoice,
+          payment: updated.payment || prev?.payment,
+          review: updated.review || prev?.review,
+        }));
         success(`Repair update: Status is now ${updated.status}`);
       }
     };
@@ -282,7 +294,9 @@ export default function CustomerRequestDetailPage() {
                 <Star className="w-5 h-5 fill-brand-orange" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">How was Vikram's repair service?</h3>
+                <h3 className="text-sm font-bold text-white">
+                  How was {request.mechanic?.name || 'the mechanic'}&apos;s repair service?
+                </h3>
                 <p className="text-xs text-slate-400">Rate your experience to help local Kanpur mechanics improve.</p>
               </div>
             </div>
@@ -488,12 +502,12 @@ export default function CustomerRequestDetailPage() {
                   <Building2 className="w-5 h-5 text-cyan-800" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-navy-900">{request.garage.name}</h4>
-                  <p className="text-xs text-slate-500">{request.garage.city}</p>
+                  <h4 className="text-sm font-bold text-navy-900">{request.garage?.name || 'Authorized Service Garage'}</h4>
+                  <p className="text-xs text-slate-500">{request.garage?.city || 'Kanpur'}</p>
                 </div>
               </div>
               <p className="text-xs text-slate-500 pt-1 border-t border-slate-100">
-                {request.garage.address} | Ph: {request.garage.phone}
+                {request.garage?.address || 'Kanpur Service Bay'} | Ph: {request.garage?.phone || 'N/A'}
               </p>
             </div>
 
@@ -506,21 +520,21 @@ export default function CustomerRequestDetailPage() {
                 <div className="space-y-2.5">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-amber-50 text-brand-orange flex items-center justify-center font-bold text-sm">
-                      {request.mechanic.name.charAt(0)}
+                      {request.mechanic.name?.charAt(0) || 'M'}
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-navy-900">{request.mechanic.name}</h4>
+                      <h4 className="text-sm font-bold text-navy-900">{request.mechanic.name || 'Mechanic'}</h4>
                       <p className="text-xs text-slate-500 flex items-center gap-1">
                         <Phone className="w-3 h-3 text-slate-400" />
-                        {request.mechanic.phone}
+                        {request.mechanic.phone || 'N/A'}
                       </p>
                     </div>
                   </div>
                   {request.mechanic.mechanicProfile && (
                     <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
                       <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                      Rating: {request.mechanic.mechanicProfile.rating.toFixed(1)} / 5.0 (
-                      {request.mechanic.mechanicProfile.totalReviews} reviews)
+                      Rating: {(request.mechanic.mechanicProfile.rating ?? 5).toFixed(1)} / 5.0 (
+                      {request.mechanic.mechanicProfile.totalReviews ?? 0} reviews)
                     </div>
                   )}
                 </div>
@@ -612,7 +626,19 @@ export default function CustomerRequestDetailPage() {
           isOpen={paymentModalOpen}
           onClose={() => setPaymentModalOpen(false)}
           onPaymentSuccess={(data) => {
-            setRequest(data.request);
+            setRequest((prev: any) => ({
+              ...prev,
+              ...(data.request || {}),
+              garage: data.request?.garage || prev?.garage,
+              vehicle: data.request?.vehicle || prev?.vehicle,
+              customer: data.request?.customer || prev?.customer,
+              mechanic: data.request?.mechanic || prev?.mechanic,
+              estimates: data.request?.estimates || prev?.estimates,
+              invoice: data.request?.invoice || prev?.invoice,
+              payment: data.payment || data.request?.payment || prev?.payment,
+              status: 'PAID',
+            }));
+            fetchRequest();
           }}
         />
       )}
@@ -624,6 +650,7 @@ export default function CustomerRequestDetailPage() {
         onClose={() => setReviewModalOpen(false)}
         onReviewSubmitted={(review) => {
           setRequest((prev: any) => ({ ...prev, review }));
+          fetchRequest();
         }}
       />
 

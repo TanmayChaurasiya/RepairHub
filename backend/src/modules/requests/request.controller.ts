@@ -59,11 +59,7 @@ export async function createRequest(req: AuthenticatedRequest, res: Response, ne
           },
         },
       },
-      include: {
-        vehicle: true,
-        garage: true,
-        statusHistory: true,
-      },
+      include: FULL_REQUEST_INCLUDE,
     });
 
     emitRequestUpdated(newRequest.id, newRequest);
