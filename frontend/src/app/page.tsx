@@ -16,6 +16,7 @@ import {
   Building2,
   ChevronRight,
   Sparkles,
+  Shield,
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -45,8 +46,8 @@ export default function LandingPage() {
             <a href="#features" className="hover:text-brand-cyan transition-colors">
               Platform Roles
             </a>
-            <a href="#demo-logins" className="hover:text-brand-orange transition-colors">
-              Demo Credentials
+            <a href="#portals" className="hover:text-brand-orange transition-colors">
+              Login Section
             </a>
           </nav>
 
@@ -101,10 +102,10 @@ export default function LandingPage() {
                 Launch Live Portal <ArrowRight className="w-4 h-4" />
               </Link>
               <a
-                href="#demo-logins"
+                href="#portals"
                 className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-navy-800/90 hover:bg-navy-700 text-slate-200 text-sm font-bold border border-navy-700/80 flex items-center justify-center gap-2 transition-all"
               >
-                View Seed Logins
+                View Login Portals
               </a>
             </div>
 
@@ -307,7 +308,7 @@ export default function LandingPage() {
 
               <div className="pt-4 border-t border-slate-100">
                 <Link
-                  href="/login?email=arun.customer@gmail.com"
+                  href="/login"
                   className="w-full py-3 rounded-xl bg-slate-900 hover:bg-emerald-600 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
                 >
                   Explore Customer Experience <ArrowRight className="w-4 h-4" />
@@ -359,7 +360,7 @@ export default function LandingPage() {
 
               <div className="pt-4 border-t border-slate-100">
                 <Link
-                  href="/login?email=vikram.mechanic@repairhub.in"
+                  href="/login"
                   className="w-full py-3 rounded-xl bg-slate-900 hover:bg-cyan-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
                 >
                   Launch Mechanic Console <ArrowRight className="w-4 h-4" />
@@ -411,7 +412,7 @@ export default function LandingPage() {
 
               <div className="pt-4 border-t border-slate-100">
                 <Link
-                  href="/login?email=admin@repairhub.in"
+                  href="/login"
                   className="w-full py-3 rounded-xl bg-slate-900 hover:bg-brand-orange text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
                 >
                   Access Admin Tower <ArrowRight className="w-4 h-4" />
@@ -422,89 +423,113 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Demo Logins Section */}
-      <section id="demo-logins" className="py-16 bg-navy-900 text-white px-4 sm:px-6 lg:px-8 scroll-mt-20">
+      {/* Platform Portals Section */}
+      <section id="portals" className="py-16 bg-navy-900 text-white px-4 sm:px-6 lg:px-8 scroll-mt-20">
         <div className="max-w-7xl mx-auto space-y-10">
           <div className="text-center space-y-2">
             <span className="text-xs font-bold uppercase tracking-wider text-brand-cyan">
-              Instant Sandbox Access
+              Unified Automotive Ecosystem
             </span>
-            <h2 className="text-3xl font-black text-white">Pre-Seeded Demo Credentials</h2>
+            <h2 className="text-3xl font-black text-white">Dedicated Role-Based Portals</h2>
             <p className="text-sm text-slate-400">
-              All accounts use the password:{' '}
-              <span className="font-mono bg-navy-950 px-2 py-0.5 rounded text-brand-orange font-bold border border-navy-800">
-                Password123!
-              </span>
+              Secure, tenant-isolated access for every stakeholder in the vehicle repair lifecycle.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Admin */}
-            <div className="bg-navy-950/80 p-6 rounded-2xl border border-navy-800 space-y-4 hover:border-brand-orange transition-colors">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-brand-orange/20 text-brand-orange border border-brand-orange/30">
-                  Administrator
-                </span>
-                <Building2 className="w-5 h-5 text-brand-orange" />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+            {/* Master Admin */}
+            <div className="bg-navy-950/80 p-6 rounded-2xl border border-navy-800 space-y-4 hover:border-rose-500/50 transition-colors flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                    Master Admin
+                  </span>
+                  <Shield className="w-5 h-5 text-rose-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Central Operations</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Multi-garage oversight, workshop lifecycle approvals, cross-garage technician roster, system audit trails & comparative analytics.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-white">Ramesh Gupta</h3>
-                <p className="text-xs text-slate-400">admin@repairhub.in</p>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Full analytics dashboard, mechanic ranking & auto-assign, garage verification, and complaint resolution.
-              </p>
               <Link
-                href="/login?email=admin@repairhub.in"
+                href="/login"
                 className="w-full py-2.5 rounded-xl bg-navy-800 hover:bg-navy-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
               >
-                Log In as Admin <ChevronRight className="w-4 h-4" />
+                Admin Sign In <ChevronRight className="w-4 h-4" />
+              </Link>
+            </div>
+
+            {/* Garage Owner */}
+            <div className="bg-navy-950/80 p-6 rounded-2xl border border-navy-800 space-y-4 hover:border-brand-cyan/50 transition-colors flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/30">
+                    Garage Owner
+                  </span>
+                  <Building2 className="w-5 h-5 text-brand-cyan" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Workshop Command</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Independent garage profile, mechanic onboarding & dispatch, service requests management, bay allocations, and revenue tracking.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/login"
+                className="w-full py-2.5 rounded-xl bg-navy-800 hover:bg-navy-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+              >
+                Garage Sign In <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
 
             {/* Mechanic */}
-            <div className="bg-navy-950/80 p-6 rounded-2xl border border-navy-800 space-y-4 hover:border-brand-cyan transition-colors">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/30">
-                  Senior Mechanic
-                </span>
-                <Wrench className="w-5 h-5 text-brand-cyan" />
+            <div className="bg-navy-950/80 p-6 rounded-2xl border border-navy-800 space-y-4 hover:border-brand-orange/50 transition-colors flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-brand-orange/20 text-brand-orange border border-brand-orange/30">
+                    Technician
+                  </span>
+                  <Wrench className="w-5 h-5 text-brand-orange" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Bay Workspace</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Assigned repair job cards, vehicle diagnostics, parts & labour estimate generator, and milestone progress stepper.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-white">Vikram Sharma</h3>
-                <p className="text-xs text-slate-400">vikram.mechanic@repairhub.in</p>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Assigned jobs, skill editor, vehicle inspection, line-item estimate builder, and repair status progress.
-              </p>
               <Link
-                href="/login?email=vikram.mechanic@repairhub.in"
+                href="/login"
                 className="w-full py-2.5 rounded-xl bg-navy-800 hover:bg-navy-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
               >
-                Log In as Mechanic <ChevronRight className="w-4 h-4" />
+                Mechanic Sign In <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
 
             {/* Customer */}
-            <div className="bg-navy-950/80 p-6 rounded-2xl border border-navy-800 space-y-4 hover:border-emerald-400 transition-colors">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  Vehicle Owner
-                </span>
-                <Car className="w-5 h-5 text-emerald-400" />
+            <div className="bg-navy-950/80 p-6 rounded-2xl border border-navy-800 space-y-4 hover:border-emerald-500/50 transition-colors flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    Vehicle Owner
+                  </span>
+                  <Car className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Customer Portal</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Book repairs across certified garages, approve transparent line-item estimates, track bay progress live, and download tax invoices.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-white">Arun Kumar</h3>
-                <p className="text-xs text-slate-400">arun.customer@gmail.com</p>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Manage multiple vehicles, create service requests, approve transparent estimates, test payment & download PDF invoice.
-              </p>
               <Link
-                href="/login?email=arun.customer@gmail.com"
+                href="/login"
                 className="w-full py-2.5 rounded-xl bg-navy-800 hover:bg-navy-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
               >
-                Log In as Customer <ChevronRight className="w-4 h-4" />
+                Customer Sign In <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
           </div>

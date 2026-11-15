@@ -18,6 +18,8 @@ import paymentRoutes from './modules/payments/payment.routes.js';
 import reviewRoutes from './modules/reviews/review.routes.js';
 import complaintRoutes from './modules/complaints/complaint.routes.js';
 import analyticsRoutes from './modules/analytics/analytics.routes.js';
+import garageOwnerRoutes from './modules/garageOwner/garageOwner.routes.js';
+import adminRoutes from './modules/admin/admin.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -69,6 +71,8 @@ export function createApp(): Express {
   app.use('/api/reviews', reviewRoutes);
   app.use('/api/complaints', complaintRoutes);
   app.use('/api/analytics', analyticsRoutes);
+  app.use('/api/garage', garageOwnerRoutes);
+  app.use('/api/admin', adminRoutes);
 
   // 404 handler
   app.use((req: Request, res: Response) => {

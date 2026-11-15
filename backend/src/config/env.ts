@@ -18,6 +18,14 @@ const envSchema = z.object({
   PAYMENT_PROVIDER: z.enum(['MOCK', 'RAZORPAY']).default('MOCK'),
   RAZORPAY_KEY_ID: z.string().optional().default(''),
   RAZORPAY_KEY_SECRET: z.string().optional().default(''),
+  SMTP_HOST: z.string().optional().default('smtp.gmail.com'),
+  SMTP_PORT: z.string().default('587').transform(Number),
+  SMTP_USER: z.string().optional().default(''),
+  SMTP_PASS: z.string().optional().default(''),
+  EMAIL_FROM: z.string().optional().default('RepairHub <no-reply@repairhub.in>'),
+  FRONTEND_URL: z.string().default('http://localhost:3000'),
+  MASTER_ADMIN_EMAIL: z.string().email().default('mrbindastanmay@gmail.com'),
+  MASTER_ADMIN_INITIAL_PASSWORD: z.string().min(8).optional().default('MasterAdmin@2026!'),
 });
 
 export const env = envSchema.parse(process.env);

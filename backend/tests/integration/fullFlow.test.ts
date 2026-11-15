@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { prisma } from '../../src/config/db.js';
+import { env } from '../../src/config/env.js';
 
 const app = createApp();
 
@@ -18,10 +19,14 @@ describe('RepairHub Integration Tests (Full Flow & Security Rules)', () => {
   let customerBToken: string;
 
   beforeAll(async () => {
-    // Login seeded admin
+    // Login Master Admin
     const adminLoginRes = await request(app)
       .post('/api/auth/login')
-      .send({ email: 'admin@repairhub.in', password: 'Password123!' });
+      .send({
+        email: env.MASTER_ADMIN_EMAIL,
+        password: env.MASTER_ADMIN_INITIAL_PASSWORD || 'MasterAdmin@2026!',
+        expectedRole: 'ADMIN',
+      });
     expect(adminLoginRes.status).toBe(200);
     adminToken = adminLoginRes.body.accessToken;
 

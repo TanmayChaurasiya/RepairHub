@@ -82,12 +82,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     navItems = [
       { label: 'Assigned Jobs', href: '/mechanic', icon: ClipboardList },
     ];
+  } else if (user.role === 'GARAGE') {
+    navItems = [
+      { label: 'Overview', href: '/garage', icon: LayoutDashboard },
+      { label: 'Bookings', href: '/garage/bookings', icon: ClipboardList },
+      { label: 'Mechanic Team', href: '/garage/mechanics', icon: Users },
+      { label: 'Garage Profile', href: '/garage/profile', icon: Building2 },
+    ];
   } else if (user.role === 'ADMIN') {
     navItems = [
       { label: 'Overview', href: '/admin', icon: LayoutDashboard },
-      { label: 'All Repairs', href: '/admin/requests', icon: Wrench },
+      { label: 'All Garages', href: '/admin/garages', icon: Building2 },
       { label: 'Mechanics', href: '/admin/mechanics', icon: Users },
-      { label: 'Garages', href: '/admin/garages', icon: Building2 },
+      { label: 'All Repairs', href: '/admin/requests', icon: Wrench },
+      { label: 'Audit Logs', href: '/admin/audit-logs', icon: FileText },
       { label: 'Complaints', href: '/admin/complaints', icon: AlertCircle },
     ];
   }
@@ -106,8 +114,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <span className="text-lg font-black tracking-tight text-white block">
                 Repair<span className="text-brand-orange">Hub</span>
               </span>
-              <span className="text-[10px] font-semibold text-brand-cyan tracking-wider uppercase block">
-                Kanpur Workshop
+              <span className="text-[10px] font-semibold text-brand-cyan tracking-wider uppercase block truncate max-w-[140px]">
+                {user.role === 'ADMIN'
+                  ? 'Master Admin'
+                  : user.role === 'GARAGE'
+                  ? user.ownedGarage?.name || 'Garage Portal'
+                  : user.mechanicProfile?.garage?.name || 'Kanpur Workshop'}
               </span>
             </div>
           </Link>

@@ -33,18 +33,16 @@ cd frontend && npm run dev
 
 ---
 
-## 👥 Seed Demo Credentials
+## 👥 Role-Based Authentication & Access Architecture
 
-Every role has pre-seeded data with full history so every portal screen is fully populated upon first launch. All accounts share the password: **`Password123!`**
+RepairHub uses strict role-based access control (RBAC) across four dedicated portals:
 
-| Role | Name | Email | Password | Primary Capabilities |
-| :--- | :--- | :--- | :--- | :--- |
-| **ADMIN** | Ramesh Gupta | `admin@repairhub.in` | `Password123!` | Analytics dashboard, smart mechanic ranking & auto-assign, garage network verification, complaint resolution |
-| **MECHANIC** | Vikram Sharma | `vikram.mechanic@repairhub.in` | `Password123!` | Engine & Brakes specialist. Bay job card, inspection diagnosis, versioned estimate builder, repair progress stepper |
-| **MECHANIC** | Amit Verma | `amit.mechanic@repairhub.in` | `Password123!` | Electrical & AC specialist. Real-time availability toggle, parts & labour line items |
-| **MECHANIC** | Rajesh Yadav | `rajesh.mechanic@repairhub.in` | `Password123!` | Suspension & Bodywork specialist |
-| **CUSTOMER** | Arun Kumar | `arun.customer@gmail.com` | `Password123!` | Swift Dzire & Activa 6G owner. View paid & active jobs, approve/reject estimates, mock UPI payment, download PDF |
-| **CUSTOMER** | Priya Singh | `priya.customer@gmail.com` | `Password123!` | Creta SX owner. Active AC repair request ready for customer approval |
+| Role | Portal Focus | Access Control |
+| :--- | :--- | :--- |
+| **MASTER ADMIN** | Central Platform Governance | Exclusive to configured `MASTER_ADMIN_EMAIL` (`mrbindastanmay@gmail.com`). Verified against database role & email. |
+| **GARAGE OWNER** | Workshop Fleet & Workforce Command | Independent garage credentials. Verified workshop profile, team invitations & job assignments. |
+| **MECHANIC** | Bay Technician Console | Assigned to approved garage. Digital job cards, inspection diagnosis, estimate builder. |
+| **CUSTOMER** | Vehicle Owner Portal | Self-registered vehicle owners. Live repair tracking, estimate approvals, UPI payments & PDF invoices. |
 
 ---
 

@@ -8,6 +8,8 @@ import {
   EstimateItemKind,
   PaymentStatus,
   ComplaintStatus,
+  GarageStatus,
+  MechanicStatus,
 } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -17,6 +19,8 @@ async function main() {
   console.log('Seeding RepairHub database...');
 
   // Clean existing data
+  await prisma.auditLog.deleteMany();
+  await prisma.mechanicInvitation.deleteMany();
   await prisma.complaint.deleteMany();
   await prisma.review.deleteMany();
   await prisma.payment.deleteMany();
@@ -29,29 +33,79 @@ async function main() {
   await prisma.mechanicProfile.deleteMany();
   await prisma.garage.deleteMany();
   await prisma.refreshToken.deleteMany();
+  await prisma.passwordResetToken.deleteMany();
   await prisma.user.deleteMany();
 
-  const passwordHash = await bcrypt.hash('Password123!', 10);
+  const masterAdminEmail = process.env.MASTER_ADMIN_EMAIL || 'mrbindastanmay@gmail.com';
+  const masterAdminPass = process.env.MASTER_ADMIN_INITIAL_PASSWORD || 'MasterAdmin@2026!';
+  const adminPasswordHash = await bcrypt.hash(masterAdminPass, 10);
+  const generalPasswordHash = await bcrypt.hash('Password123!', 10);
+  const passwordHash = generalPasswordHash;
 
-  // 1. Admin
+  // 1. Exclusive Master Admin
   const admin = await prisma.user.create({
     data: {
-      email: 'admin@repairhub.in',
-      passwordHash,
-      name: 'Ramesh Gupta (Admin)',
-      phone: '9876543210',
+      email: masterAdminEmail,
+      passwordHash: adminPasswordHash,
+      name: 'Tanmay Chaurasiya (Master Admin)',
+      phone: '9807186955',
       role: Role.ADMIN,
     },
   });
 
-  // 2. Verified Garage in Kanpur
+  // 2. Garage Owners
+  const ownerA = await prisma.user.create({
+    data: {
+      email: 'owner@sharmaauto.com',
+      passwordHash: generalPasswordHash,
+      name: 'Suresh Sharma (Garage Owner)',
+      phone: '9876543230',
+      role: Role.GARAGE,
+    },
+  });
+
+  const ownerB = await prisma.user.create({
+    data: {
+      email: 'citymotors@gmail.com',
+      passwordHash,
+      name: 'Rajiv Malhotra (City Motors)',
+      phone: '9876543240',
+      role: Role.GARAGE,
+    },
+  });
+
+  // 3. Garages
   const garage = await prisma.garage.create({
     data: {
-      name: 'Kanpur Auto Care & Diagnostics',
+      name: 'Sharma Auto Works',
       address: '124/8 GT Road, Sarvodaya Nagar',
       city: 'Kanpur',
+      state: 'Uttar Pradesh',
+      pinCode: '208005',
       phone: '0512-2589000',
+      description: 'Premier multi-brand vehicle repair and diagnostics center in Kanpur.',
+      operatingHours: '09:00 AM - 08:00 PM (Mon - Sat)',
+      services: ['ENGINE', 'BRAKES', 'ELECTRICAL', 'AC', 'SUSPENSION', 'GENERAL_SERVICE', 'BODYWORK'],
       isVerified: true,
+      status: GarageStatus.APPROVED,
+      ownerId: ownerA.id,
+    },
+  });
+
+  const garageB = await prisma.garage.create({
+    data: {
+      name: 'City Motors',
+      address: '45 Hazratganj Main Road',
+      city: 'Lucknow',
+      state: 'Uttar Pradesh',
+      pinCode: '226001',
+      phone: '0522-2618000',
+      description: 'Modern car care and fast servicing garage in Lucknow.',
+      operatingHours: '08:30 AM - 07:30 PM (All days)',
+      services: ['ENGINE', 'BRAKES', 'ELECTRICAL', 'GENERAL_SERVICE'],
+      isVerified: false,
+      status: GarageStatus.PENDING,
+      ownerId: ownerB.id,
     },
   });
 
@@ -351,13 +405,7 @@ async function main() {
     },
   });
 
-  console.log('Seed completed successfully!');
-  console.log('Demo Logins:');
-  console.log('Admin:    admin@repairhub.in / Password123!');
-  console.log('Mechanic: vikram.mechanic@repairhub.in / Password123!');
-  console.log('Mechanic: amit.mechanic@repairhub.in / Password123!');
-  console.log('Customer: arun.customer@gmail.com / Password123!');
-  console.log('Customer: priya.customer@gmail.com / Password123!');
+  console.log('✅ Database seed completed successfully! Master Admin configured.');
 }
 
 main()

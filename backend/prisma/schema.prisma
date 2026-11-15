@@ -11,6 +11,21 @@ enum Role {
   CUSTOMER
   MECHANIC
   ADMIN
+  GARAGE
+}
+
+enum GarageStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum MechanicStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  SUSPENDED
 }
 
 enum VehicleType {
@@ -87,35 +102,58 @@ model User {
   complaints          Complaint[]      @relation("CustomerComplaints")
   resolvedComplaints  Complaint[]      @relation("AdminResolvedComplaints")
   refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  ownedGarage         Garage?          @relation("GarageOwner")
+  auditLogs           AuditLog[]
 }
 
 model Garage {
-  id         String            @id @default(uuid())
-  name       String
-  address    String
-  city       String
-  phone      String
-  isVerified Boolean           @default(false)
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
+  id              String               @id @default(uuid())
+  name            String
+  address         String
+  city            String
+  state           String?
+  pinCode         String?
+  phone           String
+  description     String?
+  operatingHours  String?
+  services        String[]             @default([])
+  isVerified      Boolean              @default(false)
+  status          GarageStatus         @default(PENDING)
+  rejectionReason String?
+  ownerId         String?              @unique
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
 
-  mechanics  MechanicProfile[]
-  requests   RepairRequest[]
+  owner           User?                @relation("GarageOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  mechanics       MechanicProfile[]
+  requests        RepairRequest[]
+  invitations     MechanicInvitation[]
+
+  @@index([status])
+  @@index([city])
 }
 
 model MechanicProfile {
-  id           String   @id @default(uuid())
-  userId       String   @unique
-  garageId     String
-  skills       String[]
-  available    Boolean  @default(true)
-  rating       Float    @default(5.0)
-  totalReviews Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String         @id @default(uuid())
+  userId          String         @unique
+  garageId        String
+  skills          String[]
+  specialization  String?
+  experienceYears Int            @default(0)
+  available       Boolean        @default(true)
+  status          MechanicStatus @default(ACTIVE)
+  rejectionReason String?
+  rating          Float          @default(5.0)
+  totalReviews    Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  garage       Garage   @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  garage          Garage         @relation(fields: [garageId], references: [id], onDelete: Cascade)
+
+  @@index([garageId])
+  @@index([status])
 }
 
 model Vehicle {
@@ -281,4 +319,53 @@ model RefreshToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model MechanicInvitation {
+  id         String    @id @default(uuid())
+  garageId   String
+  email      String
+  name       String
+  phone      String
+  skills     String[]
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  garage     Garage    @relation(fields: [garageId], references: [id], onDelete: Cascade)
+
+  @@index([garageId])
+  @@index([email])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorId      String
+  actorRole    Role
+  action       String
+  targetEntity String
+  targetId     String
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  actor        User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([actorId])
+  @@index([action])
+  @@index([targetEntity, targetId])
+  @@index([createdAt])
 }

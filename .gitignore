@@ -1,8 +1,28 @@
-node_modules
-.next
-dist
-build
+# Dependencies
+node_modules/
+
+# Environment secrets
 .env
+.env.*
+!.env.example
+!.env.*.example
+
+# Frontend build
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# Backend generated files
+coverage/
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Logs
 *.log
+npm-debug.log*
+
+# OS files
 .DS_Store
 Thumbs.db

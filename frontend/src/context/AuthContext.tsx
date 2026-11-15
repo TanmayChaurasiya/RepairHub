@@ -10,7 +10,7 @@ export interface User {
   name: string;
   email: string;
   phone: string;
-  role: 'CUSTOMER' | 'MECHANIC' | 'ADMIN';
+  role: 'CUSTOMER' | 'MECHANIC' | 'ADMIN' | 'GARAGE';
   mechanicProfile?: {
     id: string;
     garageId: string;
@@ -18,6 +18,9 @@ export interface User {
     available: boolean;
     rating: number;
     totalReviews: number;
+    status?: 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED';
+    specialization?: string;
+    experienceYears?: number;
     garage?: {
       id: string;
       name: string;
@@ -25,14 +28,30 @@ export interface User {
       isVerified: boolean;
     };
   };
+  ownedGarage?: {
+    id: string;
+    name: string;
+    city: string;
+    address: string;
+    phone: string;
+    state?: string;
+    pinCode?: string;
+    description?: string;
+    operatingHours?: string;
+    services?: string[];
+    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
+    isVerified: boolean;
+    rejectionReason?: string;
+  };
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<User>;
+  login: (email: string, password: string, expectedRole?: string) => Promise<User>;
   register: (data: { name: string; email: string; phone: string; password: string }) => Promise<void>;
+  setAuthData: (user: User, accessToken: string, refreshToken: string) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -75,12 +94,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = async (email: string, password: string): Promise<User> => {
+  const login = async (email: string, password: string, expectedRole?: string): Promise<User> => {
+    const payload: any = { email, password };
+    if (expectedRole && expectedRole !== 'ALL') {
+      payload.expectedRole = expectedRole;
+    }
     const data = await api.post<{
       user: User;
       accessToken: string;
       refreshToken: string;
-    }>('/auth/login', { email, password });
+    }>('/auth/login', payload);
 
     localStorage.setItem('repairhub_token', data.accessToken);
     localStorage.setItem('repairhub_refresh_token', data.refreshToken);
@@ -114,6 +137,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     getSocket();
   };
 
+  const setAuthData = (newUser: User, newAccessToken: string, newRefreshToken: string) => {
+    localStorage.setItem('repairhub_token', newAccessToken);
+    localStorage.setItem('repairhub_refresh_token', newRefreshToken);
+    localStorage.setItem('repairhub_user', JSON.stringify(newUser));
+
+    setToken(newAccessToken);
+    setUser(newUser);
+    getSocket();
+  };
+
   const logout = () => {
     const refreshToken = localStorage.getItem('repairhub_refresh_token');
     if (refreshToken) {
@@ -138,6 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         login,
         register,
+        setAuthData,
         logout,
         refreshUser,
       }}

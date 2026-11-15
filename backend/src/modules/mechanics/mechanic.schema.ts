@@ -17,3 +17,10 @@ export const updateAvailabilitySchema = z.object({
 export const updateSkillsSchema = z.object({
   skills: z.array(z.nativeEnum(RepairCategory)).min(1, 'At least one skill is required'),
 });
+
+export const acceptInvitationSchema = z.object({
+  token: z.string().min(10, 'Valid token is required'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  specialization: z.string().optional(),
+  experienceYears: z.number().min(0).optional(),
+});
