@@ -23,6 +23,7 @@ import adminRoutes from './modules/admin/admin.routes.js';
 
 export function createApp(): Express {
   const app = express();
+  app.set('trust proxy', 1);
 
   // Security Headers & Cross-Origin settings
   app.use(
