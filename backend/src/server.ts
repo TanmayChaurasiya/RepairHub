@@ -23,12 +23,10 @@ server.listen(env.PORT, () => {
     console.error('Failed to initialize Master Admin:', err);
   });
 
-  // Verify SMTP Connection on startup
-  if (env.SMTP_USER && env.SMTP_PASS) {
-    emailService.verifyConnection().catch(() => {});
-  } else if (env.NODE_ENV === 'production') {
-    console.error('❌ [FATAL] SMTP credentials (SMTP_USER, SMTP_PASS) are required in production mode.');
-  } else {
-    console.log('ℹ️  [EMAIL SERVICE] Running in development mode without SMTP credentials. Emails will log to console.');
-  }
+  // Verify Email Service Connection on startup (Brevo REST API or Gmail SMTP)
+  emailService.verifyConnection().catch((err) => {
+    if (env.NODE_ENV === 'production') {
+      console.error('❌ [FATAL] Email service verification failed in production:', err);
+    }
+  });
 });

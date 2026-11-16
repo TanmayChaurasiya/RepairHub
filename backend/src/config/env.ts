@@ -26,6 +26,9 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().default('http://localhost:3000'),
   MASTER_ADMIN_EMAIL: z.string().email().default('mrbindastanmay@gmail.com'),
   MASTER_ADMIN_INITIAL_PASSWORD: z.string().min(8).optional().default('MasterAdmin@2026!'),
+  BREVO_API_KEY: z.string().optional().default(''),
+  BREVO_SENDER_EMAIL: z.string().optional().default(''),
+  BREVO_SENDER_NAME: z.string().optional().default('RepairHub'),
 });
 
 export const env = envSchema.parse(process.env);

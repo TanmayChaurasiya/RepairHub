@@ -14,24 +14,32 @@ export class EmailService {
     this.initTransporter();
   }
 
+  /**
+   * Checks whether Brevo API is configured and active
+   */
+  public isBrevoActive(): boolean {
+    return Boolean(
+      env.BREVO_API_KEY &&
+      env.BREVO_API_KEY.trim() !== '' &&
+      env.BREVO_API_KEY !== 'paste_your_copied_key'
+    );
+  }
+
   private initTransporter() {
-    // In production, do NOT silently fall back if credentials are missing
-    if (env.NODE_ENV === 'production' && (!env.SMTP_USER || !env.SMTP_PASS)) {
-      throw new Error(
-        'FATAL: SMTP credentials (SMTP_USER, SMTP_PASS) are required in production mode for password reset delivery.'
-      );
+    // If Brevo is active, Nodemailer SMTP is secondary
+    if (this.isBrevoActive()) {
+      return;
     }
 
     if (env.SMTP_USER && env.SMTP_PASS) {
       const cleanUser = env.SMTP_USER.trim();
-      // Google App Passwords often contain spaces (e.g. "gbut yhfy pioo niwm") - sanitize them
       const cleanPass = env.SMTP_PASS.replace(/\s+/g, '');
 
       this.transporter = nodemailer.createTransport({
         host: env.SMTP_HOST || 'smtp.gmail.com',
         port: env.SMTP_PORT || 587,
         secure: env.SMTP_PORT === 465, // false for 587 (enables STARTTLS)
-        requireTLS: true, // enforce STARTTLS negotiation
+        requireTLS: true,
         auth: {
           user: cleanUser,
           pass: cleanPass,
@@ -46,28 +54,121 @@ export class EmailService {
   }
 
   /**
-   * Verifies the SMTP connection and credentials using transporter.verify()
+   * Verifies the active email provider connection (Brevo REST API or Gmail SMTP)
    */
   async verifyConnection(): Promise<{ success: boolean; error?: string }> {
+    if (this.isBrevoActive()) {
+      try {
+        const res = await fetch('https://api.brevo.com/v3/smtp/templates', {
+          method: 'GET',
+          headers: {
+            'api-key': env.BREVO_API_KEY!,
+            'Accept': 'application/json',
+          },
+        });
+
+        if (res.ok) {
+          console.log(
+            `✅ [EMAIL SERVICE: BREVO] API connection verified successfully (Sender: ${env.BREVO_SENDER_EMAIL || env.SMTP_USER})`
+          );
+          return { success: true };
+        } else {
+          const errData = (await res.json().catch(() => ({}))) as any;
+          const msg = errData.message || `Brevo returned HTTP ${res.status}`;
+          console.error(`❌ [EMAIL SERVICE: BREVO] API verification failed: ${msg}`);
+          return { success: false, error: msg };
+        }
+      } catch (err: any) {
+        console.error(`❌ [EMAIL SERVICE: BREVO] Connection error:`, err?.message);
+        return { success: false, error: err?.message };
+      }
+    }
+
     if (!this.transporter) {
-      const msg = 'No SMTP transporter initialized (missing SMTP_USER or SMTP_PASS).';
+      const msg = 'No Email provider initialized (neither Brevo API key nor SMTP credentials configured).';
       if (env.NODE_ENV === 'production') {
         throw new Error(msg);
       }
+      console.log('ℹ️  [EMAIL SERVICE] Running in development mode without email credentials. Emails will log to console.');
       return { success: false, error: msg };
     }
 
     try {
       await this.transporter.verify();
       console.log(
-        `✅ [EMAIL SERVICE] SMTP connection verified successfully (${env.SMTP_HOST || 'smtp.gmail.com'}:${env.SMTP_PORT || 587} with STARTTLS)`
+        `✅ [EMAIL SERVICE: GMAIL SMTP] Connection verified successfully (${env.SMTP_HOST || 'smtp.gmail.com'}:${env.SMTP_PORT || 587} with STARTTLS)`
       );
       return { success: true };
     } catch (err: any) {
       const sanitizedError = err?.message || 'SMTP connection verification failed';
-      console.error(`❌ [EMAIL SERVICE] SMTP verification failed: ${sanitizedError}`);
+      console.error(`❌ [EMAIL SERVICE: GMAIL SMTP] Verification failed: ${sanitizedError}`);
       return { success: false, error: sanitizedError };
     }
+  }
+
+  /**
+   * Dispatches email via Brevo REST API (https://api.brevo.com/v3/smtp/email)
+   */
+  private async sendViaBrevo({
+    toEmail,
+    toName,
+    subject,
+    htmlContent,
+    textContent,
+  }: {
+    toEmail: string;
+    toName?: string;
+    subject: string;
+    htmlContent: string;
+    textContent: string;
+  }): Promise<void> {
+    const senderEmail = env.BREVO_SENDER_EMAIL || env.SMTP_USER || 'no-reply@repairhub.in';
+    const senderName = env.BREVO_SENDER_NAME || 'RepairHub';
+
+    // Brevo requires valid, non-empty textContent or omits it if absent
+    let cleanText = (textContent || '').trim();
+    if (!cleanText && htmlContent) {
+      cleanText = htmlContent.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+    }
+    if (!cleanText) {
+      cleanText = subject;
+    }
+
+    const payload: Record<string, any> = {
+      sender: {
+        name: senderName,
+        email: senderEmail,
+      },
+      to: [
+        {
+          email: toEmail,
+          name: toName || 'User',
+        },
+      ],
+      subject,
+      htmlContent,
+      textContent: cleanText,
+    };
+
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': env.BREVO_API_KEY!,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errJson = (await res.json().catch(() => ({}))) as any;
+      const errorMsg = errJson.message || `Brevo returned HTTP ${res.status}`;
+      console.error(`❌ [EMAIL SERVICE: BREVO] Failed sending to ${toEmail}: ${errorMsg}`);
+      throw new Error(`Brevo delivery failed: ${errorMsg}`);
+    }
+
+    const data = (await res.json()) as any;
+    console.log(`✅ [EMAIL SERVICE: BREVO] Email delivered to ${toEmail}. MessageId: ${data.messageId}`);
   }
 
   /**
@@ -75,11 +176,6 @@ export class EmailService {
    */
   async sendPasswordResetEmail({ toEmail, name, resetToken }: SendPasswordResetParams): Promise<void> {
     const resetUrl = `${env.FRONTEND_URL}/reset-password?token=${encodeURIComponent(resetToken)}`;
-
-    // Production guard: never silently fall back
-    if (env.NODE_ENV === 'production' && !this.transporter) {
-      throw new Error('SMTP transporter is not initialized. Cannot send password reset email in production.');
-    }
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -184,6 +280,19 @@ If you did not request a password reset, you can safely ignore this email.
 
 — RepairHub Team`;
 
+    // 1. Try Brevo REST API if configured
+    if (this.isBrevoActive()) {
+      await this.sendViaBrevo({
+        toEmail,
+        toName: name,
+        subject: 'Reset Your RepairHub Password',
+        htmlContent,
+        textContent,
+      });
+      return;
+    }
+
+    // 2. Fall back to Nodemailer SMTP
     if (this.transporter) {
       try {
         const info = await this.transporter.sendMail({
@@ -193,21 +302,26 @@ If you did not request a password reset, you can safely ignore this email.
           text: textContent,
           html: htmlContent,
         });
-        console.log(`✅ [EMAIL SERVICE] Password reset email delivered to ${toEmail}. MessageId: ${info.messageId}`);
+        console.log(`✅ [EMAIL SERVICE: GMAIL SMTP] Password reset email delivered to ${toEmail}. MessageId: ${info.messageId}`);
       } catch (err: any) {
         const sanitizedError = err?.message || 'Unknown delivery failure';
-        console.error(`❌ [EMAIL SERVICE] Failed to send email to ${toEmail}: ${sanitizedError}`);
+        console.error(`❌ [EMAIL SERVICE: GMAIL SMTP] Failed to send email to ${toEmail}: ${sanitizedError}`);
         throw new Error(`Failed to deliver password reset email: ${sanitizedError}`);
       }
-    } else {
-      // In development or test mode when SMTP is deliberately not configured, log clearly
-      console.log('--------------------------------------------------');
-      console.log('📧 [EMAIL DISPATCH - DEV/TEST MODE (No SMTP credentials)]');
-      console.log(`To: ${toEmail}`);
-      console.log(`Subject: Reset Your RepairHub Password`);
-      console.log(`Reset URL: ${resetUrl}`);
-      console.log('--------------------------------------------------');
+      return;
     }
+
+    // 3. Dev/Test mode fallback
+    if (env.NODE_ENV === 'production') {
+      throw new Error('No email provider is configured. Cannot deliver reset email in production.');
+    }
+
+    console.log('--------------------------------------------------');
+    console.log('📧 [EMAIL DISPATCH - DEV/TEST MODE (No Email Credentials)]');
+    console.log(`To: ${toEmail}`);
+    console.log(`Subject: Reset Your RepairHub Password`);
+    console.log(`Reset URL: ${resetUrl}`);
+    console.log('--------------------------------------------------');
   }
 
   /**
@@ -224,26 +338,47 @@ If you did not request a password reset, you can safely ignore this email.
     text?: string;
     html?: string;
   }): Promise<void> {
+    const htmlContent = html || text || '';
+    const textContent = text || '';
+
+    // 1. Try Brevo REST API if configured
+    if (this.isBrevoActive()) {
+      try {
+        await this.sendViaBrevo({
+          toEmail: to,
+          subject,
+          htmlContent,
+          textContent,
+        });
+      } catch (err: any) {
+        console.error(`❌ [EMAIL SERVICE: BREVO] Failed generic email to ${to}:`, err?.message);
+      }
+      return;
+    }
+
+    // 2. Fall back to Nodemailer SMTP
     if (this.transporter) {
       try {
         const info = await this.transporter.sendMail({
           from: env.EMAIL_FROM || env.SMTP_USER,
           to,
           subject,
-          text: text || '',
-          html: html || text || '',
+          text: textContent,
+          html: htmlContent,
         });
-        console.log(`✅ [EMAIL SERVICE] Email delivered to ${to} (${subject}). MessageId: ${info.messageId}`);
+        console.log(`✅ [EMAIL SERVICE: GMAIL SMTP] Email delivered to ${to} (${subject}). MessageId: ${info.messageId}`);
       } catch (err: any) {
-        console.error(`❌ [EMAIL SERVICE] Failed to deliver email to ${to}:`, err?.message);
+        console.error(`❌ [EMAIL SERVICE: GMAIL SMTP] Failed to deliver email to ${to}:`, err?.message);
       }
-    } else {
-      console.log('--------------------------------------------------');
-      console.log(`📧 [EMAIL DISPATCH - DEV/TEST MODE]`);
-      console.log(`To: ${to}`);
-      console.log(`Subject: ${subject}`);
-      console.log('--------------------------------------------------');
+      return;
     }
+
+    // 3. Dev fallback
+    console.log('--------------------------------------------------');
+    console.log(`📧 [EMAIL DISPATCH - DEV/TEST MODE]`);
+    console.log(`To: ${to}`);
+    console.log(`Subject: ${subject}`);
+    console.log('--------------------------------------------------');
   }
 }
 
