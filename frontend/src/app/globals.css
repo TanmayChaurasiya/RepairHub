@@ -63,3 +63,27 @@ body {
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out forwards;
 }
+
+/* PWA & Mobile Touch Optimization */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .safe-area-top {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+  .safe-area-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Standalone Native App Feel */
+@media (display-mode: standalone) {
+  body {
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+}
+
+/* Minimum Accessible Touch Target helper */
+.touch-target-min {
+  min-height: 44px;
+  min-width: 44px;
+}

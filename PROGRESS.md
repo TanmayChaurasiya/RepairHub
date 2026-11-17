@@ -98,6 +98,29 @@ RepairHub has been upgraded from a single-garage workflow into a production-read
   - Master Admin initialization bootstrap service (`adminInit.service.ts`) ensures role integrity and purges legacy demo admin.
   - Comprehensive automated security test suite: `backend/tests/integration/masterAdminSecurity.test.ts`.
 
+- [x] **Phase 12: Progressive Web App (PWA) Implementation & Mobile Architecture**
+  - Converted existing Next.js 14 App Router application into a production-ready, installable PWA for Android, iOS, and Desktop without breaking changes or third-party bloat.
+  - Authored standard Web App Manifest (`manifest.webmanifest` & `manifest.json`) with standalone display mode, orientation lock, brand colors (`#0f172a`, `#ffffff`), and quick action shortcuts.
+  - Generated full set of crisp, brand-aligned icons: 192x192, 512x512, 512x512 maskable, apple-touch-icon (180x180), and SVG vector asset.
+  - Built custom, production-safe Service Worker (`public/sw.js`):
+    - Strict security bypass: Never caches `/api/*`, `/socket.io/*`, authentication routes, or JWT tokens.
+    - Network-first navigation strategy with automatic fallback to branded `/offline` page.
+    - Cache-first with background revalidation for static assets (`_next/static`, icons, fonts).
+    - Automatic legacy cache cleanup and client claim on activation.
+    - Integrated Web Push notification and click-handling listeners.
+  - Created responsive PWA Install Experience (`PWAInstallPrompt.tsx`):
+    - Android/Chromium native `beforeinstallprompt` hook with "Install RepairHub App" banner and header/sidebar button integration.
+    - iOS Safari detection with step-by-step "Add to Home Screen" visual guide modal.
+    - Standalone mode auto-detection (`display-mode: standalone`) to suppress prompts when already installed.
+  - Implemented mobile UI/UX optimization:
+    - Viewport configuration with `viewportFit: 'cover'`.
+    - iOS notch and home-bar safe area padding (`env(safe-area-inset-top)`, `env(safe-area-inset-bottom)`).
+    - Accessible touch targets (minimum 44px) across navigation, drawer, and action buttons.
+    - Mobile drawer responsive install trigger.
+    - Mobile-safe toast notification container.
+  - Added push notification permission and local notification dispatch utility (`pushNotifications.ts`).
+  - Verified with full Next.js production build (27 routes including `/offline`) and TypeScript typecheck (0 errors).
+
 ---
 
 ## 📁 3. Files Created & Modified
@@ -126,7 +149,18 @@ RepairHub has been upgraded from a single-garage workflow into a production-read
 
 ### Frontend:
 - `frontend/src/context/AuthContext.tsx` (Added `Role.GARAGE`, `ownedGarage`, `setAuthData`)
-- `frontend/src/components/layout/AppLayout.tsx` (Added `GARAGE` and `ADMIN` sidebars)
+- `frontend/src/components/layout/AppLayout.tsx` (Added `GARAGE` and `ADMIN` sidebars, iOS notch/home-bar safe area insets, touch-friendly min 44px targets, `InstallAppButton`)
+- `frontend/src/app/layout.tsx` (Added `viewport` metadata with `viewportFit: cover`, manifest links, `appleWebApp` metadata, `ServiceWorkerRegistration`, `PWAInstallPrompt`)
+- `frontend/src/app/globals.css` (Added safe area classes, standalone app tap-highlight optimizations, touch target helpers)
+- `frontend/src/context/ToastContext.tsx` (Mobile safe-area positioning & responsive width)
+- `frontend/public/manifest.webmanifest` & `frontend/public/manifest.json` (PWA web manifest)
+- `frontend/public/sw.js` (Custom production-safe Service Worker with security bypass & offline fallback)
+- `frontend/public/icons/` (`icon-192x192.png`, `icon-512x512.png`, `icon-maskable-512x512.png`, `apple-touch-icon.png`, `icon.svg`, `favicon.ico`)
+- `frontend/src/app/offline/page.tsx` (Branded offline fallback page with live connection detector)
+- `frontend/src/components/pwa/ServiceWorkerRegistration.tsx` (Client-side SW registration and update lifecycle)
+- `frontend/src/components/pwa/PWAInstallPrompt.tsx` (Android `beforeinstallprompt`, iOS Safari modal, install button)
+- `frontend/src/lib/pushNotifications.ts` (Notification permissions and local notification dispatcher)
+- `frontend/scripts/generate-icons.ps1` (High-resolution icon generation script)
 - `frontend/src/app/login/page.tsx` (4-role selector, 1-click demo logins, role routing)
 - `frontend/src/app/garage/register/page.tsx` (Workshop self-registration form)
 - `frontend/src/app/garage/status/page.tsx` (Pending, Rejected, Suspended status tracking)
@@ -143,7 +177,8 @@ RepairHub has been upgraded from a single-garage workflow into a production-read
 
 ## 🧪 4. Testing Results
 
-All 53 automated tests passing cleanly:
+### Backend Automated Test Suite:
+All 53 automated integration and unit tests passing cleanly (100% pass rate):
 ```bash
 cd backend && npm test
 ```
@@ -159,4 +194,41 @@ cd backend && npm test
    Duration  4.96s
 ```
 
-All 26 Next.js routes built cleanly with zero type errors.
+### Frontend Typecheck & Production Build:
+```bash
+cd frontend && npm run typecheck
+cd frontend && npm run build
+```
+- **TypeScript Check**: `tsc --noEmit` passed with **0 errors**.
+- **Next.js Production Build**: **27 routes compiled successfully** (including `/offline`, manifests, and all role dashboards).
+- **Service Worker & Manifest Verification**:
+  - `GET /manifest.webmanifest` -> 200 OK (`application/manifest+json`)
+  - `GET /sw.js` -> 200 OK (`application/javascript`)
+  - `GET /offline` -> 200 OK
+  - `GET /icons/icon-192x192.png` -> 200 OK (`image/png`)
+  - `GET /icons/icon-512x512.png` -> 200 OK (`image/png`)
+  - `GET /icons/icon-maskable-512x512.png` -> 200 OK (`image/png`)
+
+---
+
+## 📱 5. PWA Mobile Installation & User Experience Guide
+
+### Android (Google Chrome, Edge, Brave, Samsung Internet):
+1. Navigate to RepairHub (e.g. `https://repair-hub-ecru.vercel.app` or `http://localhost:3000`).
+2. An **"Install RepairHub App"** banner appears automatically at the bottom, or click the **"Install App"** button located in the sidebar / mobile menu.
+3. Tap **"Install"**; the native Android install dialog opens.
+4. Once confirmed, RepairHub is placed directly on the home screen and app drawer with the high-resolution RepairHub icon.
+5. Launches into a full-screen, standalone application window without browser URL bars or navigation clutter.
+
+### iOS / iPadOS (Apple Safari):
+1. Open RepairHub in **Safari** on iPhone or iPad.
+2. Tap the **"Install App"** button in the top/drawer menu to view the visual step-by-step instructions.
+3. Tap the Safari **Share** icon (square with arrow pointing up) in the navigation bar.
+4. Scroll down the share sheet and select **"Add to Home Screen"**.
+5. Tap **"Add"** in the top-right corner.
+6. The app launches with standalone iOS status bar theming, notch and home-bar safe area adaptation, and isolated standalone web application storage.
+
+### Security & Privacy Architecture:
+- **No Token Caching**: JWT tokens and private profile data are never stored in CacheStorage.
+- **Dynamic Data Integrity**: All API calls (`/api/*`), WebSockets (`/socket.io`), and database transactions always bypass the Service Worker cache and require live network access.
+- **Graceful Offline Fallback**: If network drops, users receive the branded `/offline` screen with a live connectivity status detector and emergency workshop phone numbers instead of a raw browser dinosaur crash screen.

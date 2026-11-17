@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getSocket } from '../../lib/socket';
+import { InstallAppButton } from '../pwa/PWAInstallPrompt';
 
 interface NavItem {
   label: string;
@@ -177,17 +178,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
+          <InstallAppButton className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-brand-orange/15 hover:bg-brand-orange/25 text-brand-orange text-xs font-bold border border-brand-orange/30 transition-all" />
+
           <button
             onClick={logout}
-            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-navy-800/60 hover:bg-rose-950/60 text-slate-300 hover:text-rose-300 text-xs font-semibold border border-navy-700/60 hover:border-rose-800/60 transition-all"
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-navy-800/60 hover:bg-rose-950/60 text-slate-300 hover:text-rose-300 text-xs font-semibold border border-navy-700/60 hover:border-rose-800/60 transition-all touch-target-min"
           >
             <LogOut className="w-3.5 h-3.5" /> Sign Out
           </button>
         </div>
       </aside>
 
-      {/* Mobile Top Header */}
-      <header className="md:hidden bg-navy-900 text-white p-4 flex items-center justify-between border-b border-navy-800 sticky top-0 z-40">
+      {/* Mobile Top Header (with iOS notch safe-area padding) */}
+      <header className="md:hidden bg-navy-900 text-white p-4 pt-[max(1rem,env(safe-area-inset-top))] flex items-center justify-between border-b border-navy-800 sticky top-0 z-40">
         <Link href="/" className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-brand-orange flex items-center justify-center text-white">
             <Wrench className="w-4 h-4" />
@@ -205,7 +208,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           />
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-lg bg-navy-800 text-slate-300 hover:text-white"
+            className="p-2 rounded-lg bg-navy-800 text-slate-300 hover:text-white touch-target-min flex items-center justify-center"
+            aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -224,7 +228,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium min-h-[44px] ${
                   isActive ? 'bg-brand-orange text-white font-bold' : 'text-slate-300'
                 }`}
               >
@@ -234,6 +238,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             );
           })}
 
+          <div className="py-2 border-t border-navy-800/80">
+            <InstallAppButton className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-brand-orange/20 text-brand-orange text-xs font-bold border border-brand-orange/30 transition-all min-h-[44px]" />
+          </div>
+
           <div className="pt-2 border-t border-navy-800 flex items-center justify-between">
             <div className="text-xs text-slate-300">
               <p className="font-bold">{user.name}</p>
@@ -241,7 +249,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
             <button
               onClick={logout}
-              className="text-xs text-rose-400 font-semibold p-2 flex items-center gap-1.5"
+              className="text-xs text-rose-400 font-semibold p-2 flex items-center gap-1.5 touch-target-min"
             >
               <LogOut className="w-3.5 h-3.5" /> Sign Out
             </button>
@@ -249,8 +257,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      {/* Main Content Area (with iOS home-indicator safe-area bottom padding) */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
           {children}
         </div>

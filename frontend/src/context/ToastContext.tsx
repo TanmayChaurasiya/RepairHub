@@ -46,8 +46,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-      {/* Toast Render Container */}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+      {/* Toast Render Container (Mobile Safe-Area Aware) */}
+      <div className="fixed bottom-5 left-4 right-4 sm:left-auto sm:right-5 z-50 flex flex-col gap-2 sm:max-w-sm pointer-events-none pb-[env(safe-area-inset-bottom)]">
         {toasts.map((t) => (
           <div
             key={t.id}
