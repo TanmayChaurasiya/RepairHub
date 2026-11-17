@@ -12,10 +12,18 @@ let io: Server | null = null;
 
 export function initSocketServer(httpServer: HTTPServer): Server {
   io = new Server(httpServer, {
-    cors: {
-      origin: [env.CORS_ORIGIN, 'http://localhost:3000', 'http://127.0.0.1:3000'],
-      credentials: true,
-    },
+    
+cors: {
+  origin: [
+    env.CORS_ORIGIN,
+    'https://repair-hub-ecru.vercel.app',
+    'https://repairhub-mobile-frontend.vercel.app',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+  ],
+  credentials: true,
+},
+
   });
 
   // JWT Authentication middleware for Socket.IO
