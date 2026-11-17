@@ -33,20 +33,23 @@ export function createApp(): Express {
   );
 
 
-  app.use(
-    cors({
-      origin: [
-        env.CORS_ORIGIN,
-        'https://repair-hub-ecru.vercel.app',
-        'https://repair-4d27v0bfo-tanmay-chaurasiya-s-projects.vercel.app',
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-      ],
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
-    })
-  );
+ 
+app.use(
+  cors({
+    origin: [
+      env.CORS_ORIGIN,
+      'https://repair-hub-ecru.vercel.app',
+      'https://repairhub-mobile-frontend.vercel.app',
+      'https://repair-4d27v0bfo-tanmay-chaurasiya-s-projects.vercel.app',
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+
 
 
   app.use(express.json({ limit: '10mb' }));
