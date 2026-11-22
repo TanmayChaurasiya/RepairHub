@@ -42,6 +42,7 @@ export function createApp(): Express {
         'https://repair-hub-ecru.vercel.app',
         'https://repairhub-mobile-frontend.vercel.app',
         'https://repair-4d27v0bfo-tanmay-chaurasiya-s-projects.vercel.app',
+        'https://repairhub-mobile-frontend-m21nmsb1f.vercel.app',
         'http://localhost:3000',
         'http://127.0.0.1:3000',
       ],
