@@ -191,7 +191,7 @@ export default function EmergencyMap({
     const bounds: [number, number][] = [];
 
     // 1. Customer Marker (Pulsing Red SOS Target)
-    if (customerLocation) {
+    if (customerLocation && customerLocation.lat != null && customerLocation.lng != null) {
       const customerIcon = L.divIcon({
         className: 'custom-customer-sos-marker',
         html: `
@@ -206,7 +206,7 @@ export default function EmergencyMap({
         iconAnchor: [16, 16],
       });
 
-      const customerMarker = L.marker([customerLocation.lat, customerLocation.lng], {
+      const customerMarker = L.marker([Number(customerLocation.lat), Number(customerLocation.lng)], {
         icon: customerIcon,
       }).addTo(markersGroup);
 
@@ -216,16 +216,16 @@ export default function EmergencyMap({
             🚨 Incident / Customer Location
           </div>
           <div style="color: #64748B; font-size: 11px;">
-            Coordinates: <strong>${customerLocation.lat.toFixed(5)}, ${customerLocation.lng.toFixed(5)}</strong>
+            Coordinates: <strong>${Number(customerLocation.lat).toFixed(5)}, ${Number(customerLocation.lng).toFixed(5)}</strong>
           </div>
         </div>
       `);
 
-      bounds.push([customerLocation.lat, customerLocation.lng]);
+      bounds.push([Number(customerLocation.lat), Number(customerLocation.lng)]);
     }
 
     // 2. Primary / Assigned Garage Marker
-    if (garageLocation) {
+    if (garageLocation && garageLocation.lat != null && garageLocation.lng != null) {
       const gIcon = L.divIcon({
         className: 'custom-primary-garage-marker',
         html: `
@@ -237,7 +237,7 @@ export default function EmergencyMap({
         iconAnchor: [16, 16],
       });
 
-      const gMarker = L.marker([garageLocation.lat, garageLocation.lng], {
+      const gMarker = L.marker([Number(garageLocation.lat), Number(garageLocation.lng)], {
         icon: gIcon,
       }).addTo(markersGroup);
 
@@ -248,11 +248,11 @@ export default function EmergencyMap({
         </div>
       `);
 
-      bounds.push([garageLocation.lat, garageLocation.lng]);
+      bounds.push([Number(garageLocation.lat), Number(garageLocation.lng)]);
     }
 
     // 3. Mechanic Marker (Blue Wrench / Technician in transit)
-    if (mechanicLocation) {
+    if (mechanicLocation && mechanicLocation.lat != null && mechanicLocation.lng != null) {
       const mechanicIcon = L.divIcon({
         className: 'custom-mechanic-marker',
         html: `
@@ -267,7 +267,7 @@ export default function EmergencyMap({
         iconAnchor: [16, 16],
       });
 
-      const mechanicMarker = L.marker([mechanicLocation.lat, mechanicLocation.lng], {
+      const mechanicMarker = L.marker([Number(mechanicLocation.lat), Number(mechanicLocation.lng)], {
         icon: mechanicIcon,
       }).addTo(markersGroup);
 
