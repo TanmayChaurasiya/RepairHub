@@ -1,9 +1,26 @@
 import { Response, NextFunction } from 'express';
-import { Role, GarageStatus, MechanicStatus, RequestStatus, PaymentStatus } from '@prisma/client';
+import {
+  Role,
+  GarageStatus,
+  MechanicStatus,
+  RequestStatus,
+  PaymentStatus,
+  VehicleType,
+  MechanicAvailability,
+  EmailNotificationStatus,
+  EmailNotificationType,
+  EmergencyStatus,
+} from '@prisma/client';
 import { prisma } from '../../config/db.js';
 import { AuthenticatedRequest } from '../../types/index.js';
 import { logAudit } from '../../services/audit/audit.service.js';
 import { emailService } from '../../services/email/mailer.js';
+import {
+  getEligibleMechanicsForReassignment,
+  executeMechanicReassignment,
+  getRequestAssignmentHistory,
+  listAllAssignmentHistories,
+} from '../../services/reassignment/reassignment.service.js';
 
 /**
  * 1. List all garages with multi-status filters, search, and metrics
@@ -413,6 +430,9 @@ export async function listMechanicsAdmin(req: AuthenticatedRequest, res: Respons
           specialization: m.specialization,
           experienceYears: m.experienceYears,
           available: m.available,
+          availability: m.availability,
+          breakReason: m.breakReason,
+          lastActiveAt: m.lastActiveAt,
           status: m.status,
           rating: m.rating,
           totalReviews: m.totalReviews,
@@ -451,6 +471,7 @@ export async function suspendMechanicAdmin(req: AuthenticatedRequest, res: Respo
       data: {
         status: MechanicStatus.SUSPENDED,
         available: false,
+        availability: MechanicAvailability.OFFLINE,
         rejectionReason: reason || 'Suspended by Master Admin override',
       },
       include: { user: true, garage: true },
@@ -493,6 +514,7 @@ export async function reactivateMechanicAdmin(req: AuthenticatedRequest, res: Re
       data: {
         status: MechanicStatus.ACTIVE,
         available: true,
+        availability: MechanicAvailability.AVAILABLE,
         rejectionReason: null,
       },
       include: { user: true, garage: true },
@@ -669,4 +691,572 @@ export async function getGarageComparisonAnalytics(req: AuthenticatedRequest, re
     next(err);
   }
 }
+
+/**
+ * 14. Detailed Mechanic Profile View for Admin
+ */
+export async function getMechanicDetailsAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+
+    const mechanic = await prisma.mechanicProfile.findFirst({
+      where: { OR: [{ id }, { userId: id }] },
+      include: {
+        user: { select: { id: true, name: true, email: true, phone: true, createdAt: true } },
+        garage: { select: { id: true, name: true, city: true, address: true, phone: true, status: true, operatingHours: true } },
+      },
+    });
+
+    if (!mechanic) {
+      res.status(404).json({ error: 'Mechanic not found' });
+      return;
+    }
+
+    const activeAssignments = await prisma.repairRequest.findMany({
+      where: {
+        mechanicId: mechanic.userId,
+        status: {
+          in: [
+            RequestStatus.ASSIGNED,
+            RequestStatus.INSPECTING,
+            RequestStatus.ESTIMATE_SENT,
+            RequestStatus.APPROVED,
+            RequestStatus.IN_PROGRESS,
+            RequestStatus.QC,
+          ],
+        },
+      },
+      include: {
+        vehicle: true,
+        customer: { select: { id: true, name: true, phone: true, email: true } },
+        garage: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const completedJobs = await prisma.repairRequest.count({
+      where: {
+        mechanicId: mechanic.userId,
+        status: { in: [RequestStatus.COMPLETED, RequestStatus.PAID] },
+      },
+    });
+
+    const recentCompletedJobs = await prisma.repairRequest.findMany({
+      where: {
+        mechanicId: mechanic.userId,
+        status: { in: [RequestStatus.COMPLETED, RequestStatus.PAID] },
+      },
+      take: 5,
+      include: {
+        vehicle: true,
+        customer: { select: { name: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    res.json({
+      mechanic: {
+        ...mechanic,
+        completedJobs,
+        activeJobsCount: activeAssignments.length,
+      },
+      activeAssignments,
+      recentCompletedJobs,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 15. System-wide Admin Dashboard Statistics
+ */
+export async function getAdminDashboardStats(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const [
+      totalVehicles,
+      twoWheelers,
+      cars,
+      commercialVehicles,
+      totalMechanics,
+      availableMechanics,
+      busyMechanics,
+      onBreakMechanics,
+      offlineMechanics,
+      totalGarages,
+      approvedGarages,
+      pendingGarages,
+      suspendedGarages,
+      totalEmails,
+      sentEmails,
+      failedEmails,
+      pendingEmails,
+      activeAssignments,
+      pendingReassignments,
+      revenueAgg,
+      totalCustomers,
+      totalEmergency,
+      activeEmergency,
+      completedEmergency,
+    ] = await Promise.all([
+      prisma.vehicle.count(),
+      prisma.vehicle.count({ where: { type: VehicleType.TWO_WHEELER } }),
+      prisma.vehicle.count({ where: { type: VehicleType.CAR } }),
+      prisma.vehicle.count({ where: { type: VehicleType.COMMERCIAL } }),
+      prisma.mechanicProfile.count(),
+      prisma.mechanicProfile.count({ where: { availability: MechanicAvailability.AVAILABLE, status: MechanicStatus.ACTIVE } }),
+      prisma.mechanicProfile.count({ where: { availability: MechanicAvailability.BUSY, status: MechanicStatus.ACTIVE } }),
+      prisma.mechanicProfile.count({ where: { availability: MechanicAvailability.ON_BREAK, status: MechanicStatus.ACTIVE } }),
+      prisma.mechanicProfile.count({ where: { OR: [{ availability: MechanicAvailability.OFFLINE }, { status: { not: MechanicStatus.ACTIVE } }] } }),
+      prisma.garage.count(),
+      prisma.garage.count({ where: { status: GarageStatus.APPROVED } }),
+      prisma.garage.count({ where: { status: GarageStatus.PENDING } }),
+      prisma.garage.count({ where: { status: GarageStatus.SUSPENDED } }),
+      prisma.emailNotification.count(),
+      prisma.emailNotification.count({ where: { status: EmailNotificationStatus.SENT } }),
+      prisma.emailNotification.count({ where: { status: EmailNotificationStatus.FAILED } }),
+      prisma.emailNotification.count({ where: { status: EmailNotificationStatus.PENDING } }),
+      prisma.repairRequest.count({
+        where: {
+          status: {
+            in: [
+              RequestStatus.ASSIGNED,
+              RequestStatus.INSPECTING,
+              RequestStatus.ESTIMATE_SENT,
+              RequestStatus.APPROVED,
+              RequestStatus.IN_PROGRESS,
+              RequestStatus.QC,
+            ],
+          },
+        },
+      }),
+      prisma.repairRequest.count({ where: { status: RequestStatus.ASSIGNED } }),
+      prisma.invoice.aggregate({
+        where: { request: { status: RequestStatus.PAID } },
+        _sum: { totalPaise: true },
+      }),
+      prisma.user.count({ where: { role: Role.CUSTOMER } }),
+      prisma.emergencyRequest.count(),
+      prisma.emergencyRequest.count({
+        where: {
+          status: {
+            notIn: [
+              EmergencyStatus.COMPLETED,
+              EmergencyStatus.CANCELLED,
+              EmergencyStatus.UNFULFILLED,
+            ],
+          },
+        },
+      }),
+      prisma.emergencyRequest.count({ where: { status: EmergencyStatus.COMPLETED } }),
+    ]);
+
+    const totalRevenuePaise = revenueAgg._sum.totalPaise || 0;
+
+    res.json({
+      stats: {
+        customers: {
+          total: totalCustomers,
+        },
+        emergency: {
+          total: totalEmergency,
+          active: activeEmergency,
+          completed: completedEmergency,
+        },
+        vehicles: {
+          total: totalVehicles,
+          byCategory: {
+            TWO_WHEELER: twoWheelers,
+            CAR: cars,
+            COMMERCIAL: commercialVehicles,
+          },
+        },
+        mechanics: {
+          total: totalMechanics,
+          available: availableMechanics,
+          busy: busyMechanics,
+          onBreak: onBreakMechanics,
+          offline: offlineMechanics,
+        },
+        garages: {
+          total: totalGarages,
+          approved: approvedGarages,
+          pending: pendingGarages,
+          suspended: suspendedGarages,
+        },
+        emails: {
+          total: totalEmails,
+          sent: sentEmails,
+          failed: failedEmails,
+          pending: pendingEmails,
+          deliveryRate: totalEmails > 0 ? Math.round((sentEmails / totalEmails) * 100) : 100,
+        },
+        assignments: {
+          activeCount: activeAssignments,
+          reassignableCount: pendingReassignments,
+        },
+        revenue: {
+          totalPaise: totalRevenuePaise,
+          totalRupees: Math.round(totalRevenuePaise / 100),
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 16. Customer Vehicles Platform Management
+ */
+export async function listCustomerVehiclesAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { search, category, make, page = '1', limit = '20' } = req.query;
+    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+    const take = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 20));
+    const skip = (pageNum - 1) * take;
+
+    const where: any = {};
+
+    if (category && Object.values(VehicleType).includes(category as VehicleType)) {
+      where.type = category as VehicleType;
+    }
+
+    if (make) {
+      where.make = { equals: String(make), mode: 'insensitive' };
+    }
+
+    if (search && String(search).trim() !== '') {
+      const q = String(search).trim();
+      where.OR = [
+        { regNo: { contains: q, mode: 'insensitive' } },
+        { make: { contains: q, mode: 'insensitive' } },
+        { model: { contains: q, mode: 'insensitive' } },
+        { customer: { name: { contains: q, mode: 'insensitive' } } },
+        { customer: { email: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [total, vehicles] = await Promise.all([
+      prisma.vehicle.count({ where }),
+      prisma.vehicle.findMany({
+        where,
+        skip,
+        take,
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              createdAt: true,
+              _count: { select: { vehicles: true } },
+            },
+          },
+          _count: { select: { requests: true } },
+          requests: {
+            take: 1,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              requestNumber: true,
+              status: true,
+              category: true,
+              createdAt: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    res.json({
+      vehicles: vehicles.map((v) => ({
+        id: v.id,
+        customerId: v.customerId,
+        customerName: v.customer.name,
+        customerEmail: v.customer.email,
+        customerPhone: v.customer.phone,
+        customerVehicleCount: v.customer._count.vehicles,
+        vehicleName: `${v.year} ${v.make} ${v.model}`,
+        category: v.type,
+        brand: v.make,
+        model: v.model,
+        year: v.year,
+        registrationNumber: v.regNo,
+        registrationDate: v.createdAt,
+        totalRequests: v._count.requests,
+        latestRequest: v.requests[0] || null,
+      })),
+      pagination: {
+        total,
+        page: pageNum,
+        limit: take,
+        totalPages: Math.ceil(total / take),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 17. Vehicle Details for Admin View
+ */
+export async function getVehicleDetailsAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id },
+      include: {
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            createdAt: true,
+            vehicles: {
+              select: { id: true, make: true, model: true, year: true, regNo: true, type: true },
+            },
+          },
+        },
+        requests: {
+          include: {
+            garage: { select: { id: true, name: true, city: true } },
+            mechanic: { select: { id: true, name: true, phone: true } },
+            estimates: { where: { status: 'APPROVED' } },
+            invoice: true,
+            payment: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+        emailNotifications: {
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!vehicle) {
+      res.status(404).json({ error: 'Vehicle not found' });
+      return;
+    }
+
+    res.json({ vehicle });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 18. Email Notifications Log for Admin
+ */
+export async function listEmailNotificationsAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { status, type, search, page = '1', limit = '20' } = req.query;
+    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+    const take = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 20));
+    const skip = (pageNum - 1) * take;
+
+    const where: any = {};
+
+    if (status && status !== 'ALL' && Object.values(EmailNotificationStatus).includes(status as EmailNotificationStatus)) {
+      where.status = status as EmailNotificationStatus;
+    }
+
+    if (type && type !== 'ALL' && Object.values(EmailNotificationType).includes(type as EmailNotificationType)) {
+      where.type = type as EmailNotificationType;
+    }
+
+    if (search && String(search).trim() !== '') {
+      const q = String(search).trim();
+      where.OR = [
+        { recipient: { contains: q, mode: 'insensitive' } },
+        { subject: { contains: q, mode: 'insensitive' } },
+        { vehicle: { regNo: { contains: q, mode: 'insensitive' } } },
+        { vehicle: { make: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [total, notifications] = await Promise.all([
+      prisma.emailNotification.count({ where }),
+      prisma.emailNotification.findMany({
+        where,
+        skip,
+        take,
+        include: {
+          vehicle: {
+            select: { id: true, make: true, model: true, regNo: true, type: true },
+          },
+          request: {
+            select: { id: true, requestNumber: true, status: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    res.json({
+      notifications,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: take,
+        totalPages: Math.ceil(total / take),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 19. Retry Failed Email Notification
+ */
+export async function retryEmailNotificationAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+
+    const notification = await prisma.emailNotification.findUnique({
+      where: { id },
+      include: { vehicle: true },
+    });
+
+    if (!notification) {
+      res.status(404).json({ error: 'Email notification record not found' });
+      return;
+    }
+
+    try {
+      await emailService.sendGenericEmail({
+        to: notification.recipient,
+        subject: notification.subject,
+        html: `<p>Notification retry from RepairHub: ${notification.subject}</p>`,
+      });
+
+      const updated = await prisma.emailNotification.update({
+        where: { id },
+        data: {
+          status: EmailNotificationStatus.SENT,
+          sentAt: new Date(),
+          errorDetails: null,
+        },
+      });
+
+      res.json({ message: 'Email retried successfully', notification: updated });
+    } catch (err: any) {
+      const updated = await prisma.emailNotification.update({
+        where: { id },
+        data: {
+          status: EmailNotificationStatus.FAILED,
+          errorDetails: err?.message || 'Retry delivery failed',
+        },
+      });
+
+      res.status(500).json({ error: 'Retry failed', details: err?.message, notification: updated });
+    }
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 20. Get Eligible Mechanics for Reassignment
+ */
+export async function getEligibleMechanicsForReassignmentAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { id } = req.params;
+    const result = await getEligibleMechanicsForReassignment(id);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err?.message || 'Failed to determine eligible mechanics' });
+  }
+}
+
+/**
+ * 21. Execute Mechanic Reassignment
+ */
+export async function reassignMechanicAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { newMechanicId, reason, expectedUpdatedAt } = req.body;
+
+    if (!newMechanicId) {
+      res.status(400).json({ error: 'Target newMechanicId is required.' });
+      return;
+    }
+
+    if (!reason || reason.trim().length < 5) {
+      res.status(400).json({ error: 'A reassignment reason of at least 5 characters is required.' });
+      return;
+    }
+
+    const result = await executeMechanicReassignment({
+      requestId: id,
+      newMechanicId,
+      reason,
+      adminId: req.user!.userId,
+      adminRole: req.user!.role,
+      expectedUpdatedAt,
+    });
+
+    res.json({
+      message: 'Mechanic successfully reassigned',
+      request: result.updatedRequest,
+      assignmentHistory: result.assignmentHistory,
+    });
+  } catch (err: any) {
+    const status = err.statusCode || 400;
+    res.status(status).json({ error: err?.message || 'Reassignment failed' });
+  }
+}
+
+/**
+ * 22. Get Assignment History for a Specific Request
+ */
+export async function getRequestAssignmentHistoryAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { id } = req.params;
+    const histories = await getRequestAssignmentHistory(id);
+    res.json({ histories });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 23. List All Platform-wide Assignment Histories
+ */
+export async function listAllAssignmentHistoriesAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { page = '1', limit = '20', search = '' } = req.query;
+    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+    const take = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 20));
+
+    const result = await listAllAssignmentHistories({
+      page: pageNum,
+      limit: take,
+      search: String(search),
+    });
+
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 

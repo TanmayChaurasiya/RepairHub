@@ -28,6 +28,29 @@ enum MechanicStatus {
   SUSPENDED
 }
 
+enum MechanicAvailability {
+  AVAILABLE
+  BUSY
+  OFFLINE
+  ON_BREAK
+}
+
+enum EmailNotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum EmailNotificationType {
+  VEHICLE_AVAILABILITY_AVAILABLE
+  VEHICLE_AVAILABILITY_UNAVAILABLE
+  MECHANIC_ASSIGNED
+  MECHANIC_REASSIGNED
+  GARAGE_APPROVAL
+  GARAGE_REJECTION
+  GENERAL
+}
+
 enum VehicleType {
   TWO_WHEELER
   CAR
@@ -42,6 +65,30 @@ enum RepairCategory {
   SUSPENSION
   GENERAL_SERVICE
   BODYWORK
+}
+
+enum EmergencyCategory {
+  FLAT_TYRE
+  BATTERY_FAILURE
+  ENGINE_OVERHEATING
+  VEHICLE_BREAKDOWN
+  ENGINE_PROBLEMS
+  FUEL_PROBLEMS
+  TOWING
+  OTHER
+}
+
+enum EmergencyStatus {
+  REQUESTED
+  SEARCHING
+  PENDING_ACCEPTANCE
+  ACCEPTED
+  EN_ROUTE
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  UNFULFILLED
 }
 
 enum RequestStatus {
@@ -95,80 +142,100 @@ model User {
 
   mechanicProfile     MechanicProfile?
   vehicles            Vehicle[]
-  customerRequests    RepairRequest[]  @relation("CustomerRequests")
-  mechanicRequests    RepairRequest[]  @relation("MechanicRequests")
-  statusHistories     StatusHistory[]
-  reviews             Review[]
-  complaints          Complaint[]      @relation("CustomerComplaints")
-  resolvedComplaints  Complaint[]      @relation("AdminResolvedComplaints")
-  refreshTokens       RefreshToken[]
-  passwordResetTokens PasswordResetToken[]
-  ownedGarage         Garage?          @relation("GarageOwner")
-  auditLogs           AuditLog[]
+  customerRequests          RepairRequest[]      @relation("CustomerRequests")
+  mechanicRequests          RepairRequest[]      @relation("MechanicRequests")
+  customerEmergencyRequests EmergencyRequest[]   @relation("CustomerEmergencyRequests")
+  mechanicEmergencyRequests EmergencyRequest[]   @relation("MechanicEmergencyRequests")
+  statusHistories           StatusHistory[]
+  reviews                   Review[]
+  complaints                Complaint[]          @relation("CustomerComplaints")
+  resolvedComplaints        Complaint[]          @relation("AdminResolvedComplaints")
+  refreshTokens             RefreshToken[]
+  passwordResetTokens       PasswordResetToken[]
+  ownedGarage               Garage?              @relation("GarageOwner")
+  auditLogs                 AuditLog[]
+  previousAssignments       AssignmentHistory[]  @relation("PreviousMechanicAssignments")
+  newAssignments            AssignmentHistory[]  @relation("NewMechanicAssignments")
+  assignedHistories         AssignmentHistory[]  @relation("AssignedByHistories")
 }
 
 model Garage {
-  id              String               @id @default(uuid())
-  name            String
-  address         String
-  city            String
-  state           String?
-  pinCode         String?
-  phone           String
-  description     String?
-  operatingHours  String?
-  services        String[]             @default([])
-  isVerified      Boolean              @default(false)
-  status          GarageStatus         @default(PENDING)
-  rejectionReason String?
-  ownerId         String?              @unique
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  id                String               @id @default(uuid())
+  name              String
+  address           String
+  city              String
+  state             String?
+  pinCode           String?
+  phone             String
+  description       String?
+  operatingHours    String?
+  services          String[]             @default([])
+  latitude          Float?               @default(26.4735)
+  longitude         Float?               @default(80.3075)
+  acceptsEmergency  Boolean              @default(true)
+  emergencyRadiusKm Float                @default(25.0)
+  emergencyPhone    String?
+  isVerified        Boolean              @default(false)
+  status            GarageStatus         @default(PENDING)
+  rejectionReason   String?
+  ownerId           String?              @unique
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
 
-  owner           User?                @relation("GarageOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  mechanics       MechanicProfile[]
-  requests        RepairRequest[]
-  invitations     MechanicInvitation[]
+  owner             User?                @relation("GarageOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  mechanics         MechanicProfile[]
+  requests          RepairRequest[]
+  emergencyRequests EmergencyRequest[]
+  invitations       MechanicInvitation[]
 
   @@index([status])
   @@index([city])
 }
 
 model MechanicProfile {
-  id              String         @id @default(uuid())
-  userId          String         @unique
-  garageId        String
-  skills          String[]
-  specialization  String?
-  experienceYears Int            @default(0)
-  available       Boolean        @default(true)
-  status          MechanicStatus @default(ACTIVE)
-  rejectionReason String?
-  rating          Float          @default(5.0)
-  totalReviews    Int            @default(0)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id                       String               @id @default(uuid())
+  userId                   String               @unique
+  garageId                 String
+  skills                   String[]
+  specialization           String?
+  experienceYears          Int                  @default(0)
+  available                Boolean              @default(true)
+  availability             MechanicAvailability @default(AVAILABLE)
+  breakReason              String?
+  lastActiveAt             DateTime?            @default(now())
+  latitude                 Float?               @default(26.4735)
+  longitude                Float?               @default(80.3075)
+  acceptsEmergency         Boolean              @default(true)
+  emergencyServiceRadiusKm Float                @default(20.0)
+  status                   MechanicStatus       @default(ACTIVE)
+  rejectionReason          String?
+  rating                   Float                @default(5.0)
+  totalReviews             Int                  @default(0)
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
 
-  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  garage          Garage         @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  user                     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  garage                   Garage               @relation(fields: [garageId], references: [id], onDelete: Cascade)
 
   @@index([garageId])
   @@index([status])
 }
 
 model Vehicle {
-  id         String          @id @default(uuid())
-  customerId String
-  type       VehicleType
-  make       String
-  model      String
-  year       Int
-  regNo      String          @unique
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
+  id                 String              @id @default(uuid())
+  customerId         String
+  type               VehicleType
+  make               String
+  model              String
+  year               Int
+  regNo              String              @unique
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
-  customer   User            @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  requests   RepairRequest[]
+  customer           User                @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  requests           RepairRequest[]
+  emergencyRequests  EmergencyRequest[]
+  emailNotifications EmailNotification[]
 }
 
 model RepairRequest {
@@ -194,8 +261,10 @@ model RepairRequest {
   estimates     Estimate[]
   invoice       Invoice?
   payment       Payment?
-  review        Review?
-  complaints    Complaint[]
+  review              Review?
+  complaints          Complaint[]
+  assignmentHistories AssignmentHistory[]
+  emailNotifications  EmailNotification[]
 
   @@index([status])
   @@index([customerId])
@@ -367,5 +436,130 @@ model AuditLog {
   @@index([actorId])
   @@index([action])
   @@index([targetEntity, targetId])
+  @@index([createdAt])
+}
+
+model AssignmentHistory {
+  id                 String        @id @default(uuid())
+  requestId          String
+  previousMechanicId String?
+  newMechanicId      String
+  assignedById       String
+  assignedByRole     Role          @default(ADMIN)
+  reason             String
+  createdAt          DateTime      @default(now())
+
+  request            RepairRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  previousMechanic   User?         @relation("PreviousMechanicAssignments", fields: [previousMechanicId], references: [id], onDelete: SetNull)
+  newMechanic        User          @relation("NewMechanicAssignments", fields: [newMechanicId], references: [id], onDelete: Cascade)
+  assignedBy         User          @relation("AssignedByHistories", fields: [assignedById], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([assignedById])
+  @@index([newMechanicId])
+  @@index([createdAt])
+}
+
+model EmailNotification {
+  id           String                  @id @default(uuid())
+  recipient    String
+  subject      String
+  template     String
+  status       EmailNotificationStatus @default(PENDING)
+  type         EmailNotificationType   @default(GENERAL)
+  vehicleId    String?
+  requestId    String?
+  metadata     Json?
+  errorDetails String?
+  sentAt       DateTime?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  vehicle      Vehicle?                @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  request      RepairRequest?          @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  @@index([recipient])
+  @@index([status])
+  @@index([type])
+  @@index([vehicleId])
+  @@index([createdAt])
+}
+
+model EmergencyRequest {
+  id                       String            @id @default(uuid())
+  requestNumber            String            @unique
+  customerId               String
+  vehicleId                String
+  garageId                 String?
+  assignedMechanicId       String?
+  category                 EmergencyCategory
+  description              String
+  photos                   String[]          @default([])
+  status                   EmergencyStatus   @default(REQUESTED)
+  pickupLatitude           Float
+  pickupLongitude          Float
+  pickupAddress            String
+  mechanicLatitude         Float?
+  mechanicLongitude        Float?
+  mechanicLocationUpdatedAt DateTime?
+  searchRadiusKm           Float             @default(15.0)
+  estimatedDistanceKm      Float?
+  estimatedDurationMinutes Int?
+  baseChargePaise          Int               @default(49900)
+  totalPaidPaise           Int               @default(0)
+  acceptedAt               DateTime?
+  enRouteAt                DateTime?
+  arrivedAt                DateTime?
+  completedAt              DateTime?
+  cancelledAt              DateTime?
+  cancellationReason       String?
+  interventionReason       String?
+  declinedMechanicIds      String[]          @default([])
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+
+  customer                 User              @relation("CustomerEmergencyRequests", fields: [customerId], references: [id], onDelete: Cascade)
+  vehicle                  Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  garage                   Garage?           @relation(fields: [garageId], references: [id], onDelete: SetNull)
+  assignedMechanic         User?             @relation("MechanicEmergencyRequests", fields: [assignedMechanicId], references: [id], onDelete: SetNull)
+  assignmentHistories      EmergencyAssignmentHistory[]
+  statusHistories          EmergencyStatusHistory[]
+
+  @@index([status])
+  @@index([customerId])
+  @@index([assignedMechanicId])
+  @@index([garageId])
+  @@index([createdAt])
+}
+
+model EmergencyAssignmentHistory {
+  id                 String           @id @default(uuid())
+  emergencyRequestId String
+  mechanicId         String
+  garageId           String?
+  action             String           // OFFERED, ACCEPTED, DECLINED, REASSIGNED, TIMEOUT, CANCELLED
+  reason             String?
+  actorId            String?
+  createdAt          DateTime         @default(now())
+
+  emergencyRequest   EmergencyRequest @relation(fields: [emergencyRequestId], references: [id], onDelete: Cascade)
+
+  @@index([emergencyRequestId])
+  @@index([mechanicId])
+  @@index([createdAt])
+}
+
+model EmergencyStatusHistory {
+  id                 String           @id @default(uuid())
+  emergencyRequestId String
+  fromStatus         EmergencyStatus?
+  toStatus           EmergencyStatus
+  actorId            String
+  note               String?
+  createdAt          DateTime         @default(now())
+
+  emergencyRequest   EmergencyRequest @relation(fields: [emergencyRequestId], references: [id], onDelete: Cascade)
+
+  @@index([emergencyRequestId])
   @@index([createdAt])
 }

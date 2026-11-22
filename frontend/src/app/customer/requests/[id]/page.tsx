@@ -20,7 +20,11 @@ import {
   Building2,
   Calendar,
   Layers,
+  Navigation,
+  MapPin,
+  X,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { AppLayout } from '../../../../components/layout/AppLayout';
 import { StatusBadge } from '../../../../components/common/StatusBadge';
 import { StatusTimeline } from '../../../../components/common/StatusTimeline';
@@ -32,6 +36,15 @@ import { api } from '../../../../lib/api';
 import { formatINR, formatDate } from '../../../../lib/utils';
 import { getSocket } from '../../../../lib/socket';
 import { useToast } from '../../../../context/ToastContext';
+
+const LiveTrackingMap = dynamic(() => import('../../../../components/common/LiveTrackingMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-[360px] rounded-2xl bg-slate-100 flex items-center justify-center border border-slate-200">
+      <div className="w-8 h-8 border-4 border-brand-orange border-t-transparent rounded-full animate-spin" />
+    </div>
+  ),
+});
 
 export default function CustomerRequestDetailPage() {
   const params = useParams();
@@ -47,6 +60,13 @@ export default function CustomerRequestDetailPage() {
   const [complaintModalOpen, setComplaintModalOpen] = useState(false);
   const [deciding, setDeciding] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  // Live Location Tracking States
+  const [trackingModalOpen, setTrackingModalOpen] = useState(false);
+  const [mechanicLocation, setMechanicLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [liveEtaMinutes, setLiveEtaMinutes] = useState<number | undefined>(undefined);
+  const [liveDistanceKm, setLiveDistanceKm] = useState<number | undefined>(undefined);
+  const [nearbyGarages, setNearbyGarages] = useState<any[]>([]);
 
   const { success, error } = useToast();
 
@@ -91,11 +111,42 @@ export default function CustomerRequestDetailPage() {
       }
     };
 
+    const onRequestLocationUpdated = (data: any) => {
+      if (data.requestId === id) {
+        setMechanicLocation({ lat: data.latitude, lng: data.longitude });
+        if (data.etaMinutes) setLiveEtaMinutes(data.etaMinutes);
+        if (data.remainingDistanceKm) setLiveDistanceKm(data.remainingDistanceKm);
+      }
+    };
+
     socket.on('request:updated', onRequestUpdated);
+    socket.on('request:location_updated', onRequestLocationUpdated);
+
+    // Initial check for nearby garages
+    api
+      .get<{ garages: any[] }>('/garages')
+      .then((res) => {
+        if (res.garages) {
+          setNearbyGarages(
+            res.garages.map((g) => ({
+              id: g.id,
+              name: g.name,
+              lat: g.latitude || 26.4735,
+              lng: g.longitude || 80.3075,
+              phone: g.phone,
+              address: g.address,
+              operatingHours: g.operatingHours,
+              acceptsEmergency: g.acceptsEmergency,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
 
     return () => {
       socket.emit('request:leave', id);
       socket.off('request:updated', onRequestUpdated);
+      socket.off('request:location_updated', onRequestLocationUpdated);
     };
   }, [id]);
 
@@ -199,6 +250,18 @@ export default function CustomerRequestDetailPage() {
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Live Track Mechanic Button */}
+            {request.mechanic && (
+              <button
+                onClick={() => setTrackingModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center gap-2 shadow-md shadow-blue-600/25 transition-all group"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                <Navigation className="w-3.5 h-3.5" />
+                Track Mechanic Live
+              </button>
+            )}
+
             {/* Raise Complaint Action */}
             <button
               onClick={() => setComplaintModalOpen(true)}
@@ -611,6 +674,122 @@ export default function CustomerRequestDetailPage() {
                 className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/20 disabled:opacity-50"
               >
                 {deciding ? 'Rejecting...' : 'Confirm Rejection'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live Mechanic Journey Tracking Modal */}
+      {trackingModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-4xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-navy-950 to-navy-900 text-white">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                  <span className="text-xs uppercase tracking-wider font-extrabold text-brand-orange">
+                    Live Satellite Tracking
+                  </span>
+                </div>
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  <Navigation className="w-5 h-5 text-brand-orange" />
+                  Technician Route &amp; Workshop Proximity
+                </h3>
+                <p className="text-xs text-slate-300">
+                  Tracking assigned mechanic <strong>{request.mechanic?.name}</strong> for Request <strong>#{request.requestNumber}</strong>
+                </p>
+              </div>
+
+              <button
+                onClick={() => setTrackingModalOpen(false)}
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-5">
+              {/* Technician Info Banner */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center font-black text-lg border border-blue-200">
+                    {(request.mechanic?.name || 'M').charAt(0)}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-extrabold text-navy-900">{request.mechanic?.name}</h4>
+                    <p className="text-xs text-slate-500 font-medium">{request.garage?.name}</p>
+                    <span className="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                      Status: {request.status}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {request.mechanic?.phone && (
+                    <a
+                      href={`tel:${request.mechanic.phone}`}
+                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition-colors"
+                    >
+                      <Phone className="w-3.5 h-3.5" /> Call ({request.mechanic.phone})
+                    </a>
+                  )}
+
+                  {liveEtaMinutes !== undefined && (
+                    <div className="text-right">
+                      <span className="text-xs text-slate-400 block font-semibold">Remaining ETA</span>
+                      <span className="text-base font-black text-brand-orange">~{liveEtaMinutes} mins</span>
+                      {liveDistanceKm !== undefined && (
+                        <span className="text-[11px] text-slate-500 block">({liveDistanceKm} km)</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Unified Live Tracking Map */}
+              <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-inner">
+                <LiveTrackingMap
+                  customerLocation={{
+                    lat: 26.4499, // Customer pickup location default
+                    lng: 80.3319,
+                  }}
+                  mechanicLocation={
+                    mechanicLocation || {
+                      lat: request.garage?.latitude || 26.4735,
+                      lng: request.garage?.longitude || 80.3075,
+                    }
+                  }
+                  garageLocation={{
+                    lat: request.garage?.latitude || 26.4735,
+                    lng: request.garage?.longitude || 80.3075,
+                  }}
+                  nearbyGarages={nearbyGarages}
+                  routeEtaMinutes={liveEtaMinutes}
+                  routeDistanceKm={liveDistanceKm}
+                  height="400px"
+                  zoom={14}
+                  showFilters={true}
+                />
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping shrink-0" />
+                <span>
+                  Real-time GPS updates stream automatically via WebSocket. You will see technician movement and remaining ETA adjust live.
+                </span>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button
+                onClick={() => setTrackingModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl bg-navy-950 hover:bg-navy-900 text-white text-xs font-bold transition-all"
+              >
+                Close Tracking
               </button>
             </div>
           </div>

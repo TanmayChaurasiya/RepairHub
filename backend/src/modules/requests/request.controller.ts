@@ -1,10 +1,10 @@
 import { Response, NextFunction } from 'express';
-import { Role, RequestStatus, EstimateStatus } from '@prisma/client';
+import { Role, RequestStatus, EstimateStatus, MechanicAvailability } from '@prisma/client';
 import { prisma } from '../../config/db.js';
 import { AuthenticatedRequest } from '../../types/index.js';
 import { validateTransition } from '../../services/stateMachine.js';
 import { rankMechanicsForRequest, MechanicCandidate } from '../../services/assignment.js';
-import { emitRequestUpdated } from '../../services/socket.js';
+import { emitRequestUpdated, emitMechanicAvailabilityUpdated, emitRequestLocationUpdated } from '../../services/socket.js';
 import { storageProvider } from '../../services/storage/index.js';
 
 export async function createRequest(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
@@ -248,7 +248,7 @@ export async function getMechanicSuggestions(req: AuthenticatedRequest, res: Res
           name: m.user.name,
           rating: m.rating,
           skills: m.skills,
-          available: m.available,
+          available: m.available && m.availability === MechanicAvailability.AVAILABLE && m.status === 'ACTIVE',
           garageVerified: m.garage.isVerified,
           garageCity: m.garage.city,
           activeJobCount,
@@ -329,7 +329,7 @@ export async function assignMechanic(req: AuthenticatedRequest, res: Response, n
             name: m.user.name,
             rating: m.rating,
             skills: m.skills,
-            available: m.available,
+            available: m.available && m.availability === MechanicAvailability.AVAILABLE && m.status === 'ACTIVE',
             garageVerified: m.garage.isVerified,
             garageCity: m.garage.city,
             activeJobCount,
@@ -377,6 +377,18 @@ export async function assignMechanic(req: AuthenticatedRequest, res: Response, n
             note: note || `Assigned to mechanic ${mechanicUser.name}`,
           },
         },
+      },
+    });
+
+    // Record in AssignmentHistory
+    await prisma.assignmentHistory.create({
+      data: {
+        requestId: id,
+        previousMechanicId: request.mechanicId,
+        newMechanicId: targetMechanicId,
+        assignedById: req.user.userId,
+        assignedByRole: req.user.role,
+        reason: note || (request.mechanicId ? 'Mechanic reassigned' : 'Initial assignment'),
       },
     });
 
@@ -492,6 +504,79 @@ export async function transitionStatus(req: AuthenticatedRequest, res: Response,
       include: FULL_REQUEST_INCLUDE,
     });
 
+    // Lifecycle Availability Automation:
+    // 1. If mechanic began INSPECTING or IN_PROGRESS, mark mechanic BUSY
+    if (
+      (targetStatus === RequestStatus.INSPECTING || targetStatus === RequestStatus.IN_PROGRESS) &&
+      finalRequest?.mechanicId
+    ) {
+      const mechProfile = await prisma.mechanicProfile.findUnique({
+        where: { userId: finalRequest.mechanicId },
+      });
+      if (mechProfile && mechProfile.availability === MechanicAvailability.AVAILABLE) {
+        await prisma.mechanicProfile.update({
+          where: { id: mechProfile.id },
+          data: {
+            availability: MechanicAvailability.BUSY,
+            available: false,
+            lastActiveAt: new Date(),
+          },
+        });
+        emitMechanicAvailabilityUpdated({
+          mechanicId: finalRequest.mechanicId,
+          availability: MechanicAvailability.BUSY,
+          available: false,
+        });
+      }
+    }
+
+    // 2. If request reached COMPLETED, PAID, or CANCELLED, check if mechanic has other active jobs
+    if (
+      (targetStatus === RequestStatus.COMPLETED ||
+        targetStatus === RequestStatus.PAID ||
+        targetStatus === RequestStatus.CANCELLED) &&
+      finalRequest?.mechanicId
+    ) {
+      const remainingActiveJobs = await prisma.repairRequest.count({
+        where: {
+          mechanicId: finalRequest.mechanicId,
+          id: { not: finalRequest.id },
+          status: {
+            in: [
+              RequestStatus.ASSIGNED,
+              RequestStatus.INSPECTING,
+              RequestStatus.ESTIMATE_SENT,
+              RequestStatus.APPROVED,
+              RequestStatus.IN_PROGRESS,
+              RequestStatus.QC,
+            ],
+          },
+        },
+      });
+
+      if (remainingActiveJobs === 0) {
+        const mechProfile = await prisma.mechanicProfile.findUnique({
+          where: { userId: finalRequest.mechanicId },
+        });
+        // Only auto-revert if they were marked BUSY (do not override explicit ON_BREAK or OFFLINE)
+        if (mechProfile && mechProfile.availability === MechanicAvailability.BUSY) {
+          await prisma.mechanicProfile.update({
+            where: { id: mechProfile.id },
+            data: {
+              availability: MechanicAvailability.AVAILABLE,
+              available: true,
+              lastActiveAt: new Date(),
+            },
+          });
+          emitMechanicAvailabilityUpdated({
+            mechanicId: finalRequest.mechanicId,
+            availability: MechanicAvailability.AVAILABLE,
+            available: true,
+          });
+        }
+      }
+    }
+
     if (finalRequest) {
       emitRequestUpdated(id, finalRequest);
     }
@@ -580,6 +665,89 @@ export async function uploadRequestPhotos(req: AuthenticatedRequest, res: Respon
     });
 
     res.json({ message: 'Photos uploaded successfully', photos: updated.photos });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateMechanicLocation(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const { id } = req.params;
+    const { latitude, longitude } = req.body;
+
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+      res.status(400).json({ error: 'Valid numeric latitude and longitude are required.' });
+      return;
+    }
+
+    const request = await prisma.repairRequest.findUnique({
+      where: { id },
+      include: {
+        garage: true,
+        mechanic: { select: { id: true, name: true, phone: true } },
+      },
+    });
+
+    if (!request) {
+      res.status(404).json({ error: 'Repair request not found' });
+      return;
+    }
+
+    if (req.user.role !== Role.ADMIN && request.mechanicId !== req.user.userId) {
+      res.status(403).json({ error: 'Only the assigned mechanic or admin can update location.' });
+      return;
+    }
+
+    // Update mechanic profile location
+    if (request.mechanicId) {
+      await prisma.mechanicProfile.updateMany({
+        where: { userId: request.mechanicId },
+        data: {
+          latitude,
+          longitude,
+          lastActiveAt: new Date(),
+        },
+      });
+    }
+
+    // Calculate distance and ETA to garage
+    const gLat = request.garage.latitude ?? 26.4735;
+    const gLon = request.garage.longitude ?? 80.3075;
+
+    const R = 6371;
+    const dLat = ((gLat - latitude) * Math.PI) / 180;
+    const dLon = ((gLon - longitude) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((latitude * Math.PI) / 180) *
+        Math.cos((gLat * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const remainingDistanceKm = Math.round(R * c * 10) / 10;
+    const etaMinutes = Math.max(2, Math.round((remainingDistanceKm / 30) * 60));
+
+    emitRequestLocationUpdated(id, {
+      requestId: id,
+      latitude,
+      longitude,
+      remainingDistanceKm,
+      etaMinutes,
+      updatedAt: new Date(),
+    });
+
+    res.json({
+      success: true,
+      latitude,
+      longitude,
+      remainingDistanceKm,
+      etaMinutes,
+    });
   } catch (err) {
     next(err);
   }

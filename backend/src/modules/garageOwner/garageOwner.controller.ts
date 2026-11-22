@@ -262,6 +262,17 @@ export async function assignMechanic(req: AuthenticatedRequest, res: Response, n
         },
       });
 
+      await tx.assignmentHistory.create({
+        data: {
+          requestId,
+          previousMechanicId: request.mechanicId,
+          newMechanicId: mechanicId,
+          assignedById: req.user!.userId,
+          assignedByRole: Role.GARAGE,
+          reason: request.mechanicId ? 'Reassigned by Garage Owner' : 'Initial assignment by Garage Owner',
+        },
+      });
+
       await tx.auditLog.create({
         data: {
           actorId: req.user!.userId,

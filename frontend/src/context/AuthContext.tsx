@@ -16,6 +16,9 @@ export interface User {
     garageId: string;
     skills: string[];
     available: boolean;
+    availability?: 'AVAILABLE' | 'BUSY' | 'ON_BREAK' | 'OFFLINE';
+    breakReason?: string | null;
+    lastActiveAt?: string | null;
     rating: number;
     totalReviews: number;
     status?: 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED';

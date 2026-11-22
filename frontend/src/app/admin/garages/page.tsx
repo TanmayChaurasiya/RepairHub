@@ -15,10 +15,18 @@ import {
   Phone,
   MapPin,
   IndianRupee,
+  Clock,
+  Wrench,
+  Users,
+  ArrowRight,
+  Mail,
+  FileText,
+  Activity,
 } from 'lucide-react';
 import { AppLayout } from '../../../components/layout/AppLayout';
 import { api } from '../../../lib/api';
 import { useToast } from '../../../context/ToastContext';
+import { formatDate } from '../../../lib/utils';
 
 export default function AdminGaragesPage() {
   const [garages, setGarages] = useState<any[]>([]);
@@ -26,11 +34,29 @@ export default function AdminGaragesPage() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Modals
+  // Modals & Detail Drawer
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [selectedGarage, setSelectedGarage] = useState<any>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
+  const [detailGarage, setDetailGarage] = useState<any>(null);
+  const [detailAuditLogs, setDetailAuditLogs] = useState<any[]>([]);
+  const [drawerLoading, setDrawerLoading] = useState(false);
+
+  const handleOpenGarageDetail = async (id: string) => {
+    try {
+      setDrawerLoading(true);
+      setDetailDrawerOpen(true);
+      const res = await api.get<{ garage: any; auditLogs: any[] }>(`/admin/garages/${id}`);
+      setDetailGarage(res.garage);
+      setDetailAuditLogs(res.auditLogs || []);
+    } catch (err: any) {
+      error(err.message || 'Failed to load garage details');
+    } finally {
+      setDrawerLoading(false);
+    }
+  };
 
   // Create Form
   const [name, setName] = useState('');
@@ -254,9 +280,15 @@ export default function AdminGaragesPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {garages.map((g) => (
-                    <tr key={g.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr
+                      key={g.id}
+                      onClick={() => handleOpenGarageDetail(g.id)}
+                      className="hover:bg-slate-50/80 cursor-pointer transition-colors group"
+                    >
                       <td className="py-3.5 px-4">
-                        <span className="font-bold text-slate-900 block">{g.name}</span>
+                        <span className="font-bold text-slate-900 group-hover:text-brand-orange transition-colors block">
+                          {g.name}
+                        </span>
                         <span className="text-[10px] text-slate-400">{g.phone}</span>
                       </td>
 
@@ -418,6 +450,226 @@ export default function AdminGaragesPage() {
         </div>
       )}
 
+      {/* Garage Profile Detail Drawer */}
+      {detailDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-2xl h-full shadow-2xl flex flex-col border-l border-slate-200 overflow-hidden">
+            {/* Drawer Header */}
+            <div className="p-6 bg-navy-950 text-white flex items-center justify-between border-b border-navy-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand-orange flex items-center justify-center text-white">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-white">
+                      {detailGarage?.name || 'Workshop Profile'}
+                    </h2>
+                    {detailGarage?.isVerified && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3" /> Verified
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-300">
+                    {detailGarage?.city}, {detailGarage?.state || 'Uttar Pradesh'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDetailDrawerOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-navy-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Drawer Content */}
+            {drawerLoading || !detailGarage ? (
+              <div className="p-8 text-center text-slate-400 text-xs">
+                <div className="w-6 h-6 border-2 border-brand-orange border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                Loading workshop profile...
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Live Operating Status & Availability */}
+                {(() => {
+                  const availableMechCount = (detailGarage.mechanics || []).filter(
+                    (m: any) => m.availability === 'AVAILABLE' && m.status === 'ACTIVE'
+                  ).length;
+                  const totalMechCount = (detailGarage.mechanics || []).length;
+                  const isApproved = detailGarage.status === 'APPROVED';
+
+                  return (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                          Workshop Real-Time Availability
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full ${
+                              !isApproved
+                                ? 'bg-slate-400'
+                                : availableMechCount > 0
+                                ? 'bg-emerald-500 animate-pulse'
+                                : 'bg-amber-500'
+                            }`}
+                          />
+                          <p className="text-xs font-bold text-navy-900">
+                            {!isApproved
+                              ? 'Workshop Inactive / Under Review'
+                              : availableMechCount > 0
+                              ? `Open & Accepting Repairs (${availableMechCount} technician${availableMechCount > 1 ? 's' : ''} on duty)`
+                              : 'Workshop Busy (All mechanics occupied / on break)'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right sm:text-right">
+                        <span className="text-[10px] text-slate-500 block">Operating Hours:</span>
+                        <span className="text-xs font-mono font-bold text-navy-900">
+                          {detailGarage.operatingHours || '08:00 AM - 08:00 PM'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Owner Information Card */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <h3 className="text-xs font-bold text-navy-900 uppercase tracking-wider flex items-center gap-2">
+                    <User className="w-4 h-4 text-brand-orange" />
+                    Workshop Owner &amp; Contact Information
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-600">
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Owner Name:</span>
+                      <strong className="text-navy-900">{detailGarage.owner?.name || 'Unassigned'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Email Address:</span>
+                      <strong className="text-navy-900 font-mono">{detailGarage.owner?.email || 'N/A'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Owner Phone:</span>
+                      <strong className="text-navy-900 font-mono">{detailGarage.owner?.phone || detailGarage.phone}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Workshop Helpline:</span>
+                      <strong className="text-navy-900 font-mono">{detailGarage.phone}</strong>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <span className="text-slate-400 block text-[11px]">Physical Workshop Address:</span>
+                      <p className="text-navy-900 font-medium">
+                        {detailGarage.address}, {detailGarage.city}, {detailGarage.state || 'UP'} {detailGarage.pinCode ? `- ${detailGarage.pinCode}` : ''}
+                      </p>
+                    </div>
+                    {detailGarage.description && (
+                      <div className="sm:col-span-2">
+                        <span className="text-slate-400 block text-[11px]">Description:</span>
+                        <p className="text-slate-700 italic">{detailGarage.description}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Services Offered */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <h3 className="text-xs font-bold text-navy-900 uppercase tracking-wider flex items-center gap-2">
+                    <Wrench className="w-4 h-4 text-brand-cyan" />
+                    Supported Automotive Services ({detailGarage.services?.length || 0})
+                  </h3>
+                  {detailGarage.services && detailGarage.services.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {detailGarage.services.map((srv: string) => (
+                        <span
+                          key={srv}
+                          className="px-2.5 py-1 rounded-lg bg-navy-50 text-navy-800 text-[11px] font-bold border border-navy-100"
+                        >
+                          {srv}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No specific service tags configured.</p>
+                  )}
+                </div>
+
+                {/* Mechanics Team Roster */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <h3 className="text-xs font-bold text-navy-900 uppercase tracking-wider flex items-center gap-2">
+                    <Users className="w-4 h-4 text-brand-orange" />
+                    Technicians Working at this Bay ({detailGarage.mechanics?.length || 0})
+                  </h3>
+                  {detailGarage.mechanics && detailGarage.mechanics.length > 0 ? (
+                    <div className="space-y-2">
+                      {detailGarage.mechanics.map((m: any) => (
+                        <div
+                          key={m.id}
+                          className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 text-xs"
+                        >
+                          <div>
+                            <p className="font-bold text-navy-900">{m.user?.name}</p>
+                            <p className="text-[11px] text-slate-500 font-mono">{m.user?.email}</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {m.specialization || 'General Technician'} &bull; {m.experienceYears}y exp
+                            </p>
+                          </div>
+                          <div className="text-right space-y-1">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                                m.availability === 'AVAILABLE'
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  : m.availability === 'BUSY'
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                  : m.availability === 'ON_BREAK'
+                                  ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                  : 'bg-slate-200 text-slate-700'
+                              }`}
+                            >
+                              {m.availability || (m.available ? 'AVAILABLE' : 'OFFLINE')}
+                            </span>
+                            <span className="block text-[10px] text-slate-400 font-bold">
+                              ★ {m.rating.toFixed(1)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No mechanics assigned to this garage yet.</p>
+                  )}
+                </div>
+
+                {/* Audit History Log */}
+                {detailAuditLogs && detailAuditLogs.length > 0 && (
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                    <h3 className="text-xs font-bold text-navy-900 uppercase tracking-wider flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-slate-400" />
+                      Administrative Audit Trail
+                    </h3>
+                    <div className="space-y-2">
+                      {detailAuditLogs.slice(0, 5).map((log: any) => (
+                        <div key={log.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <strong className="text-navy-900 font-mono">{log.action}</strong>
+                            <span className="text-slate-400">{formatDate(log.createdAt)}</span>
+                          </div>
+                          <p className="text-slate-600 text-[11px] mt-0.5">
+                            By {log.actor?.name} ({log.actorRole})
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Manual Create Garage Modal */}
       {createModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -520,6 +772,226 @@ export default function AdminGaragesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Garage Profile Detail Drawer */}
+      {detailDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-2xl h-full shadow-2xl flex flex-col border-l border-slate-200 overflow-hidden">
+            {/* Drawer Header */}
+            <div className="p-6 bg-navy-950 text-white flex items-center justify-between border-b border-navy-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand-orange flex items-center justify-center text-white">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-white">
+                      {detailGarage?.name || 'Workshop Profile'}
+                    </h2>
+                    {detailGarage?.isVerified && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3" /> Verified
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-300">
+                    {detailGarage?.city}, {detailGarage?.state || 'Uttar Pradesh'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDetailDrawerOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-navy-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Drawer Content */}
+            {drawerLoading || !detailGarage ? (
+              <div className="p-8 text-center text-slate-400 text-xs">
+                <div className="w-6 h-6 border-2 border-brand-orange border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                Loading workshop profile...
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Live Operating Status & Availability */}
+                {(() => {
+                  const availableMechCount = (detailGarage.mechanics || []).filter(
+                    (m: any) => m.availability === 'AVAILABLE' && m.status === 'ACTIVE'
+                  ).length;
+                  const totalMechCount = (detailGarage.mechanics || []).length;
+                  const isApproved = detailGarage.status === 'APPROVED';
+
+                  return (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                          Workshop Real-Time Availability
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full ${
+                              !isApproved
+                                ? 'bg-slate-400'
+                                : availableMechCount > 0
+                                ? 'bg-emerald-500 animate-pulse'
+                                : 'bg-amber-500'
+                            }`}
+                          />
+                          <p className="text-xs font-bold text-navy-900">
+                            {!isApproved
+                              ? 'Workshop Inactive / Under Review'
+                              : availableMechCount > 0
+                              ? `Open & Accepting Repairs (${availableMechCount} technician${availableMechCount > 1 ? 's' : ''} on duty)`
+                              : 'Workshop Busy (All mechanics occupied / on break)'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right sm:text-right">
+                        <span className="text-[10px] text-slate-500 block">Operating Hours:</span>
+                        <span className="text-xs font-mono font-bold text-navy-900">
+                          {detailGarage.operatingHours || '08:00 AM - 08:00 PM'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Owner Information Card */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <h3 className="text-xs font-bold text-navy-900 uppercase tracking-wider flex items-center gap-2">
+                    <User className="w-4 h-4 text-brand-orange" />
+                    Workshop Owner &amp; Contact Information
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-600">
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Owner Name:</span>
+                      <strong className="text-navy-900">{detailGarage.owner?.name || 'Unassigned'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Email Address:</span>
+                      <strong className="text-navy-900 font-mono">{detailGarage.owner?.email || 'N/A'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Owner Phone:</span>
+                      <strong className="text-navy-900 font-mono">{detailGarage.owner?.phone || detailGarage.phone}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Workshop Helpline:</span>
+                      <strong className="text-navy-900 font-mono">{detailGarage.phone}</strong>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <span className="text-slate-400 block text-[11px]">Physical Workshop Address:</span>
+                      <p className="text-navy-900 font-medium">
+                        {detailGarage.address}, {detailGarage.city}, {detailGarage.state || 'UP'} {detailGarage.pinCode ? `- ${detailGarage.pinCode}` : ''}
+                      </p>
+                    </div>
+                    {detailGarage.description && (
+                      <div className="sm:col-span-2">
+                        <span className="text-slate-400 block text-[11px]">Description:</span>
+                        <p className="text-slate-700 italic">{detailGarage.description}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Services Offered */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <h3 className="text-xs font-bold text-navy-900 uppercase tracking-wider flex items-center gap-2">
+                    <Wrench className="w-4 h-4 text-brand-cyan" />
+                    Supported Automotive Services ({detailGarage.services?.length || 0})
+                  </h3>
+                  {detailGarage.services && detailGarage.services.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {detailGarage.services.map((srv: string) => (
+                        <span
+                          key={srv}
+                          className="px-2.5 py-1 rounded-lg bg-navy-50 text-navy-800 text-[11px] font-bold border border-navy-100"
+                        >
+                          {srv}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No specific service tags configured.</p>
+                  )}
+                </div>
+
+                {/* Mechanics Team Roster */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <h3 className="text-xs font-bold text-navy-900 uppercase tracking-wider flex items-center gap-2">
+                    <Users className="w-4 h-4 text-brand-orange" />
+                    Technicians Working at this Bay ({detailGarage.mechanics?.length || 0})
+                  </h3>
+                  {detailGarage.mechanics && detailGarage.mechanics.length > 0 ? (
+                    <div className="space-y-2">
+                      {detailGarage.mechanics.map((m: any) => (
+                        <div
+                          key={m.id}
+                          className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 text-xs"
+                        >
+                          <div>
+                            <p className="font-bold text-navy-900">{m.user?.name}</p>
+                            <p className="text-[11px] text-slate-500 font-mono">{m.user?.email}</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {m.specialization || 'General Technician'} &bull; {m.experienceYears}y exp
+                            </p>
+                          </div>
+                          <div className="text-right space-y-1">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                                m.availability === 'AVAILABLE'
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  : m.availability === 'BUSY'
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                  : m.availability === 'ON_BREAK'
+                                  ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                  : 'bg-slate-200 text-slate-700'
+                              }`}
+                            >
+                              {m.availability || (m.available ? 'AVAILABLE' : 'OFFLINE')}
+                            </span>
+                            <span className="block text-[10px] text-slate-400 font-bold">
+                              ★ {m.rating.toFixed(1)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No mechanics assigned to this garage yet.</p>
+                  )}
+                </div>
+
+                {/* Audit History Log */}
+                {detailAuditLogs && detailAuditLogs.length > 0 && (
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                    <h3 className="text-xs font-bold text-navy-900 uppercase tracking-wider flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-slate-400" />
+                      Administrative Audit Trail
+                    </h3>
+                    <div className="space-y-2">
+                      {detailAuditLogs.slice(0, 5).map((log: any) => (
+                        <div key={log.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <strong className="text-navy-900 font-mono">{log.action}</strong>
+                            <span className="text-slate-400">{formatDate(log.createdAt)}</span>
+                          </div>
+                          <p className="text-slate-600 text-[11px] mt-0.5">
+                            By {log.actor?.name} ({log.actorRole})
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

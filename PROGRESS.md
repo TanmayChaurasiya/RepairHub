@@ -232,3 +232,165 @@ cd frontend && npm run build
 - **No Token Caching**: JWT tokens and private profile data are never stored in CacheStorage.
 - **Dynamic Data Integrity**: All API calls (`/api/*`), WebSockets (`/socket.io`), and database transactions always bypass the Service Worker cache and require live network access.
 - **Graceful Offline Fallback**: If network drops, users receive the branded `/offline` screen with a live connectivity status detector and emergency workshop phone numbers instead of a raw browser dinosaur crash screen.
+
+---
+
+## 🚀 6. Phase 13: Admin Intelligence, Mechanic Reassignment & Automation Enhancement
+
+### A. Feature Overview & Architecture
+
+1. **Mechanic Reassignment System (Admin-Only)**:
+   - **Inspection State Invariant Guard**: Admins can reassign mechanics when `request.status === 'ASSIGNED'`. Once technical inspection begins (`INSPECTING`, `ESTIMATE_SENT`, `IN_PROGRESS`, etc.), reassignment is strictly blocked (HTTP 400/409) to preserve technical chain of custody.
+   - **Optimistic Concurrency Control**: Uses `expectedUpdatedAt` locking to prevent race conditions and stale assignment overrides.
+   - **Smart Recommendation Engine**: Evaluates verified garages in the request city, certified repair skills (`ENGINE`, `BRAKES`, `SUSPENSION`, etc.), current real-time availability (`AVAILABLE`), and workload penalty (`Rating - (ActiveJobs * 0.5)`).
+   - **Audit Trail & Dual Notification**: Every reassignment records an immutable `AssignmentHistory` entry (tracking previous mechanic, new mechanic, admin actor, reason, timestamp), creates an `AuditLog`, broadcasts live via Socket.IO (`request:updated`), and dispatches email alerts to both previous and new mechanics via Brevo/SMTP.
+   - **Frontend UI**: Integrated into `/admin/requests/[id]` with an interactive Reassignment Modal (enforcing >= 5-char mandatory reason) and a dedicated **Technician Assignment History** chronological timeline.
+
+2. **Garage & Mechanic Account Details (Admin Read-Only Drawers)**:
+   - **Garage Profile Drawer** (`/admin/garages`): Clickable garage cards/rows opening a slide-over drawer displaying owner information, contact details, operating hours, active workshop operating status, certified service list, active mechanics roster, and verification actions.
+   - **Mechanic Profile Drawer** (`/admin/mechanics`): Clickable mechanic cards/rows displaying full profile, contact info, assigned garage, certified skills, real-time availability indicator, active repair jobs, and rating stats.
+
+3. **Customer Vehicle Management** (`/admin/vehicles`):
+   - Comprehensive platform vehicle directory listing all customer-registered vehicles.
+   - Includes real-time search by customer name, email, vehicle make, model, and registration number.
+   - Multi-category filtering (`CAR`, `TWO_WHEELER`, `COMMERCIAL`) and pagination.
+   - Clickable vehicle drawer detailing vehicle specifications, customer account details, other vehicles owned by the customer, and complete repair history.
+
+4. **Automated Vehicle Availability Email Notifications**:
+   - Asynchronous, non-blocking background job triggered upon vehicle creation (`POST /api/vehicles`).
+   - Checks garage operating hours (`isWithinOperatingHours`) and on-duty mechanic availability matching the vehicle category.
+   - Dispatches responsive HTML email:
+     - **Template A (Mechanics Available)**: Informs customer that compatible certified mechanics are currently available, with direct booking links.
+     - **Template B (Specialists Occupied / Off-Hours)**: Informs customer of peak hours and provides garage directory exploration links.
+   - **Duplicate Guard**: Checks existing `EmailNotification` records to prevent duplicate emails for the same vehicle.
+   - **Admin Email Notifications Dashboard** (`/admin/email-notifications`): Real-time delivery audit table tracking status (`SENT`, `PENDING`, `FAILED`), error details, and 1-click retry.
+
+5. **Mechanic Real-Time Availability System**:
+   - 4-State dispatch system:
+     - 🟢 `AVAILABLE`: Available for job dispatch.
+     - 🟡 `BUSY`: Actively working on repair bay jobs. Automatically set when inspection or repair begins.
+     - ☕ `ON_BREAK`: Stepped away with quick break reason presets (*Lunch Break*, *Parts Pickup*, *Short Rest*, *Personal Break*) or custom reason.
+     - ⚫ `OFFLINE`: Off-duty.
+   - Auto-reverts to `AVAILABLE` on job completion (`COMPLETED`/`CANCELLED`) if active bay queue is clear.
+   - Real-time Socket.IO event `mechanic:availability_updated` broadcasts status changes to Admin, Garage Owner, and Mechanic dashboards.
+
+6. **Admin Dashboard Overview Enhancements** (`/admin`):
+   - Real-time stat metrics showing total registered customer vehicles, active mechanics on duty, email notification deliveries, and pending reassignment counts.
+   - Direct quick-navigation cards linking to Customer Vehicles, Assignment History, and Email Notification logs.
+
+---
+
+### B. Automated Verification & Production Builds
+
+- **Integration Test Suite**: `backend/tests/integration/reassignmentAndAutomation.test.ts`
+  - **14/14 Tests Passed (100% Success)**:
+    - Real-time availability toggles (`AVAILABLE`, `ON_BREAK`, break reasons, unauthorized rejection).
+    - Asynchronous vehicle registration availability email dispatch via Brevo.
+    - Duplicate email prevention guard.
+    - Customer vehicle directory pagination, filtering, and full detail view.
+    - Email notifications audit table.
+    - Admin mechanic reassignment with candidate ranking and validation.
+    - Reassignment lock guard when vehicle inspection commences (`INSPECTING`).
+    - Immutable assignment history tracking.
+- **Backend Typecheck & Build**:
+  - `tsc --noEmit`: Passed with 0 errors.
+  - `tsc`: Production build succeeded.
+- **Frontend Typecheck & Build**:
+  - `tsc --noEmit`: Passed with 0 errors.
+  - `next build`: **30/30 routes compiled and statically optimized successfully**.
+
+
+---
+
+## [Phase 14] Emergency Assistance & Roadside Support System (SOS)
+
+### 1. Architectural Overview & Objectives
+Implemented a comprehensive, mission-critical 24x7 Emergency Assistance and Roadside Support System for RepairHub across Kanpur:
+- **Distress Location & Navigation**: GPS auto-detection with fallback manual Leaflet map pin placement.
+- **Provider Discovery & Route ETA**: Haversine distance calculations, configurable radius (10km - 40km), urban transit speeds (~25 km/h + 5 min dispatch buffer).
+- **Incident State Machine**: `REQUESTED` ➔ `SEARCHING` ➔ `PENDING_ACCEPTANCE` ➔ `ACCEPTED` ➔ `EN_ROUTE` ➔ `ARRIVED` ➔ `IN_PROGRESS` ➔ `COMPLETED` (or `CANCELLED` / `UNFULFILLED`).
+- **Atomic Acceptance & Concurrency**: Prisma transactional checks prevent multiple mechanics from double-booking or claiming the same SOS incident.
+- **Live Location Broadcasting**: Mechanic GPS streaming via `navigator.geolocation.watchPosition` pushing updates to `/api/emergency/requests/:id/location` and Socket.IO rooms.
+
+### 2. Database & Schema Updates
+- Applied Neon Cloud migration `20261121131247_emergency_roadside_assistance`.
+- Added Enums: `EmergencyCategory` (8 categories), `EmergencyStatus` (10 stages).
+- Added Models: `EmergencyRequest`, `EmergencyAssignmentHistory`, `EmergencyStatusHistory`.
+- Extended `Garage` and `MechanicProfile` with `acceptsEmergency`, `latitude`, `longitude`, and `emergencyRadiusKm`.
+
+### 3. Backend Endpoints (`/api/emergency`)
+- `GET /api/emergency/nearby`: Discover nearby verified garages and available mechanics.
+- `POST /api/emergency/requests`: Customer initiates SOS dispatch with category, location, and vehicle.
+- `GET /api/emergency/requests`: Role-tailored emergency requests listing (Customer, Mechanic, Garage, Admin).
+- `GET /api/emergency/requests/:id`: Detailed incident record with status and assignment timeline.
+- `POST /api/emergency/requests/:id/accept`: Mechanic atomic acceptance.
+- `POST /api/emergency/requests/:id/decline`: Mechanic decline with auto-rerouting to next closest provider.
+- `PATCH /api/emergency/requests/:id/status`: Transition incident stage (`EN_ROUTE`, `ARRIVED`, `IN_PROGRESS`, `COMPLETED`).
+- `PATCH /api/emergency/requests/:id/location`: Stream mechanic GPS coordinates and recalculate remaining distance/ETA.
+- `POST /api/emergency/requests/:id/reassign`: Administrative manual reassignment override with audit log.
+- `POST /api/emergency/requests/:id/cancel`: Customer cancellation with mandatory reason.
+- `PATCH /api/emergency/provider/settings`: Provider emergency availability toggle and service radius.
+
+### 4. Frontend Implementation & UI/UX Fixes
+- **Emergency Leaflet Map** (`frontend/src/components/emergency/EmergencyMap.tsx`):
+  - Dynamic SSR-safe Leaflet map with OpenStreetMap tiles.
+  - Pulsing red SOS target pin for customer, animated technician pin with route polyline, and workshop markers.
+- **Customer Emergency Portal** (`frontend/src/app/customer/emergency/page.tsx`):
+  - Emergency SOS dispatch button, GPS auto-detection, category selector pills, photo attachment.
+  - Critical safety advisory banner with immediate `tel:112` government emergency shortcut.
+  - Live incident tracker with real-time ETA, technician contact, and Socket.IO updates.
+- **Mechanic Roadside Terminal** (`frontend/src/app/mechanic/emergency/page.tsx`):
+  - Standby / Active duty toggle, incoming SOS dispatch popups, stage transition buttons.
+  - Live GPS broadcasting via `navigator.geolocation.watchPosition`.
+- **Garage Emergency Ops** (`frontend/src/app/garage/emergency/page.tsx`):
+  - Workshop roadside acceptance toggle, emergency hotline, service radius configuration.
+- **Admin Command Center** (`frontend/src/app/admin/emergency/page.tsx`):
+  - City-wide incident distribution map, live dispatch table, manual reassignment modal with audit trail.
+- **UI/UX Fixes**:
+  - Fixed category badge clipping in `frontend/src/app/admin/vehicles/page.tsx` with `min-w-[140px]` and `whitespace-nowrap`.
+  - Added navigation links for Roadside SOS in `frontend/src/components/layout/AppLayout.tsx`.
+  - Confirmed `/admin/customers` compiles and routes cleanly in production build.
+
+### 5. Automated Verification
+- `backend/tests/integration/emergencyAssistance.test.ts`: **8/8 integration tests passing (100%)**.
+- `npm run typecheck` (Backend): **0 errors**.
+- `npm run typecheck` (Frontend): **0 errors**.
+- `next build`: **35/35 routes compiled and statically optimized successfully**.
+
+---
+
+## [Phase 15] Unified Live Location Tracking (Ola/Uber Style) & Platform Intelligence
+
+### 1. Unified Reusable Live Tracking Component (`LiveTrackingMap.tsx` / `EmergencyMap.tsx`)
+- **Single Reusable Engine**: Unified mapping component shared seamlessly between Roadside Emergency Assistance and Normal Repair Requests.
+- **Interactive Garage Filter Pills**: Filters nearby workshops by `All`, `🚗 Cars`, `🏍️ 2-Wheelers`, and `🚨 Roadside SOS`.
+- **Workshop Visibility Toggle**: Show/hide nearby workshop markers on the map with single-click toggle.
+- **Recenter Control**: Instant re-centering to incident, mechanic, or workshop coordinates.
+- **Rich Interactive Popups**: Popups displaying garage address, star ratings, contact links (`tel:`), hours, and emergency readiness badges.
+- **Live ETA & Distance Pill**: Overlay pill displaying real-time technician ETA and remaining distance in km.
+
+### 2. Normal Repair Request Live Tracking
+- **Backend Streaming**: Mounted `PATCH /api/requests/:id/location` with authorization guards and automatic remaining distance / ETA calculation.
+- **WebSocket Broadcast**: Emits `request:location_updated` to request room and admin channel.
+- **Mechanic Journey Sharing** (`/mechanic/jobs/[id]`):
+  - "Start Journey & Share GPS" button utilizing `navigator.geolocation.watchPosition`.
+  - Real-time GPS broadcasting with active pulse indicator and coordinates display.
+  - "Stop Journey" button and automatic cleanup upon unmount or job completion.
+- **Customer Live Tracking** (`/customer/requests/[id]`):
+  - Prominent "Track Mechanic Live" button with pulsating live indicator.
+  - Interactive tracking modal displaying technician details, phone call shortcut, route polyline, and live telemetry.
+- **Admin Fleet Monitoring** (`/admin/requests/[id]`):
+  - Embedded live route tracking map view displaying assigned technician position, garage, and transit route.
+
+### 3. Admin Command Center Overview Statistics
+- **Backend Metrics**: Added `customers.total`, `emergency.total`, `emergency.active`, and `emergency.completed` to `getAdminDashboardStats`.
+- **Frontend Dashboard Cards** (`/admin`):
+  - Added dedicated Registered Customers card with direct link to `/admin/customers`.
+  - Added dedicated Roadside SOS card with active/total/resolved counts and direct link to `/admin/emergency`.
+
+### 4. Verification Suite
+- `backend/tests/integration/emergencyAssistance.test.ts`: **8/8 passed (100%)**.
+- `backend/tests/integration/reassignmentAndAutomation.test.ts`: **14/14 passed (100%)**.
+- Total Integration Tests: **22/22 passed (100%)**.
+- `npm run typecheck` (Backend): **0 errors**.
+- `npm run typecheck` (Frontend): **0 errors**.

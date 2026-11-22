@@ -11,9 +11,12 @@ import {
   AlertCircle,
   ArrowRight,
   Filter,
-  ToggleLeft,
-  ToggleRight,
   ShieldCheck,
+  Coffee,
+  PowerOff,
+  Activity,
+  X,
+  ChevronDown,
 } from 'lucide-react';
 import { AppLayout } from '../../components/layout/AppLayout';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -24,13 +27,20 @@ import { useToast } from '../../context/ToastContext';
 import { formatINR, formatDate } from '../../lib/utils';
 import { getSocket } from '../../lib/socket';
 
+type MechanicAvailability = 'AVAILABLE' | 'BUSY' | 'ON_BREAK' | 'OFFLINE';
+
 export default function MechanicDashboardPage() {
   const { user, refreshUser } = useAuth();
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [available, setAvailable] = useState(true);
-  const [togglingAvailability, setTogglingAvailability] = useState(false);
+
+  // Real-time Availability States
+  const [availability, setAvailability] = useState<MechanicAvailability>('AVAILABLE');
+  const [breakReason, setBreakReason] = useState<string>('');
+  const [updatingAvailability, setUpdatingAvailability] = useState(false);
+  const [breakModalOpen, setBreakModalOpen] = useState(false);
+  const [customBreakReason, setCustomBreakReason] = useState('');
 
   const { success, error } = useToast();
 
@@ -40,7 +50,10 @@ export default function MechanicDashboardPage() {
       const data = await api.get<{ requests: any[] }>('/requests');
       setRequests(data.requests);
       if (user?.mechanicProfile) {
-        setAvailable(user.mechanicProfile.available);
+        const currentAvail = (user.mechanicProfile.availability as MechanicAvailability) ||
+          (user.mechanicProfile.available ? 'AVAILABLE' : 'OFFLINE');
+        setAvailability(currentAvail);
+        setBreakReason(user.mechanicProfile.breakReason || '');
       }
     } catch (err: any) {
       error('Failed to load mechanic jobs');
@@ -67,24 +80,55 @@ export default function MechanicDashboardPage() {
       });
     };
 
+    const onAvailabilityUpdated = (data: any) => {
+      if (data.mechanicId === user?.id) {
+        setAvailability(data.availability);
+        setBreakReason(data.breakReason || '');
+        refreshUser();
+      }
+    };
+
     socket.on('request:updated', onRequestUpdated);
+    socket.on('mechanic:availability_updated', onAvailabilityUpdated);
+
     return () => {
       socket.off('request:updated', onRequestUpdated);
+      socket.off('mechanic:availability_updated', onAvailabilityUpdated);
     };
   }, [user]);
 
-  const handleToggleAvailability = async () => {
+  const handleUpdateAvailability = async (
+    targetAvailability: MechanicAvailability,
+    reason?: string
+  ) => {
     try {
-      setTogglingAvailability(true);
-      const nextStatus = !available;
-      await api.patch('/mechanics/availability', { available: nextStatus });
-      setAvailable(nextStatus);
-      success(`Availability status updated: You are now ${nextStatus ? 'Available for new jobs' : 'Off-duty / Busy'}`);
+      setUpdatingAvailability(true);
+      await api.patch('/mechanics/availability', {
+        availability: targetAvailability,
+        breakReason: targetAvailability === 'ON_BREAK' ? (reason || 'Personal Break') : undefined,
+      });
+
+      setAvailability(targetAvailability);
+      if (targetAvailability === 'ON_BREAK') {
+        setBreakReason(reason || 'Personal Break');
+      } else {
+        setBreakReason('');
+      }
+
+      const statusLabels: Record<MechanicAvailability, string> = {
+        AVAILABLE: 'Available (Ready for new jobs)',
+        BUSY: 'Busy (Working on bay repairs)',
+        ON_BREAK: `On Break (${reason || 'Break'})`,
+        OFFLINE: 'Offline / Off-Duty',
+      };
+
+      success(`Availability updated: ${statusLabels[targetAvailability]}`);
+      setBreakModalOpen(false);
       refreshUser();
     } catch (err: any) {
-      error('Failed to update availability');
+      error(err.message || 'Failed to update availability status');
     } finally {
-      setTogglingAvailability(false);
+      setUpdatingAvailability(false);
     }
   };
 
@@ -97,11 +141,43 @@ export default function MechanicDashboardPage() {
     (r) => !['COMPLETED', 'PAID', 'CANCELLED'].includes(r.status)
   ).length;
 
+  const availabilityConfig: Record<
+    MechanicAvailability,
+    { label: string; badgeClass: string; dotClass: string; icon: React.ReactNode }
+  > = {
+    AVAILABLE: {
+      label: 'Available',
+      badgeClass: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+      dotClass: 'bg-emerald-400',
+      icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />,
+    },
+    BUSY: {
+      label: 'Busy',
+      badgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+      dotClass: 'bg-amber-400',
+      icon: <Activity className="w-3.5 h-3.5 text-amber-400" />,
+    },
+    ON_BREAK: {
+      label: breakReason ? `On Break (${breakReason})` : 'On Break',
+      badgeClass: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+      dotClass: 'bg-cyan-400',
+      icon: <Coffee className="w-3.5 h-3.5 text-cyan-400" />,
+    },
+    OFFLINE: {
+      label: 'Offline / Off-Duty',
+      badgeClass: 'bg-slate-700 text-slate-300 border-slate-600',
+      dotClass: 'bg-slate-400',
+      icon: <PowerOff className="w-3.5 h-3.5 text-slate-400" />,
+    },
+  };
+
+  const currentConfig = availabilityConfig[availability] || availabilityConfig.AVAILABLE;
+
   return (
     <AppLayout>
       <div className="space-y-6">
         {/* Top Header Card */}
-        <div className="bg-gradient-to-r from-navy-950 via-navy-900 to-navy-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-navy-800 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="bg-gradient-to-r from-navy-950 via-navy-900 to-navy-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-navy-800 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-cyan/20 text-brand-cyan text-xs font-bold border border-brand-cyan/30">
               <Wrench className="w-3.5 h-3.5" /> Certified Workshop Bay
@@ -114,27 +190,81 @@ export default function MechanicDashboardPage() {
             </p>
           </div>
 
-          {/* Availability Toggle Chip */}
-          <div className="flex items-center gap-4 bg-navy-900/90 p-4 rounded-2xl border border-navy-800 shrink-0">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                Job Dispatch Status
-              </span>
-              <span className={`text-xs font-bold ${available ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {available ? '● Available for Assignment' : '○ Busy / Off-Duty'}
+          {/* Real-time 4-State Availability Switcher */}
+          <div className="bg-navy-900/90 p-4 sm:p-5 rounded-2xl border border-navy-800 space-y-3 shrink-0 lg:max-w-md w-full">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                  Real-time Availability Status
+                </span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className={`w-2 h-2 rounded-full ${currentConfig.dotClass} animate-pulse`} />
+                  <span className="text-xs font-black text-white">{currentConfig.label}</span>
+                </div>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${currentConfig.badgeClass}`}>
+                Live
               </span>
             </div>
-            <button
-              disabled={togglingAvailability}
-              onClick={handleToggleAvailability}
-              className={`p-2 rounded-xl border transition-all ${
-                available
-                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30'
-                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
-              }`}
-            >
-              {available ? <ToggleRight className="w-6 h-6" /> : <ToggleLeft className="w-6 h-6" />}
-            </button>
+
+            {/* Quick Status Selectors */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
+              <button
+                type="button"
+                disabled={updatingAvailability}
+                onClick={() => handleUpdateAvailability('AVAILABLE')}
+                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-center gap-1 ${
+                  availability === 'AVAILABLE'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
+                    : 'bg-navy-950 text-slate-400 border-navy-800 hover:text-white hover:bg-navy-800'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                Available
+              </button>
+
+              <button
+                type="button"
+                disabled={updatingAvailability}
+                onClick={() => handleUpdateAvailability('BUSY')}
+                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-center gap-1 ${
+                  availability === 'BUSY'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
+                    : 'bg-navy-950 text-slate-400 border-navy-800 hover:text-white hover:bg-navy-800'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                Busy
+              </button>
+
+              <button
+                type="button"
+                disabled={updatingAvailability}
+                onClick={() => setBreakModalOpen(true)}
+                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-center gap-1 ${
+                  availability === 'ON_BREAK'
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-sm'
+                    : 'bg-navy-950 text-slate-400 border-navy-800 hover:text-white hover:bg-navy-800'
+                }`}
+              >
+                <Coffee className="w-3 h-3" />
+                Break
+              </button>
+
+              <button
+                type="button"
+                disabled={updatingAvailability}
+                onClick={() => handleUpdateAvailability('OFFLINE')}
+                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-center gap-1 ${
+                  availability === 'OFFLINE'
+                    ? 'bg-slate-700 text-white border-slate-600 shadow-sm'
+                    : 'bg-navy-950 text-slate-400 border-navy-800 hover:text-white hover:bg-navy-800'
+                }`}
+              >
+                <PowerOff className="w-3 h-3" />
+                Offline
+              </button>
+            </div>
           </div>
         </div>
 
@@ -283,6 +413,76 @@ export default function MechanicDashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Break Reason Modal */}
+      {breakModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-sm w-full p-6 space-y-5 relative">
+            <button
+              onClick={() => setBreakModalOpen(false)}
+              className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-50 text-cyan-700 text-xs font-bold border border-cyan-200">
+                <Coffee className="w-3.5 h-3.5" /> Break Reason
+              </div>
+              <h3 className="text-lg font-black text-navy-900">Set Break Status</h3>
+              <p className="text-xs text-slate-500">
+                Let your garage owner and dispatch know why you are stepping away from the bay.
+              </p>
+            </div>
+
+            {/* Quick Pills */}
+            <div className="flex flex-wrap gap-2">
+              {['Lunch Break', 'Parts Pickup', 'Short Rest', 'Personal Break'].map((reason) => (
+                <button
+                  key={reason}
+                  type="button"
+                  onClick={() => handleUpdateAvailability('ON_BREAK', reason)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-brand-orange hover:text-white transition-colors"
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Input */}
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                Or Type Custom Reason
+              </label>
+              <input
+                type="text"
+                value={customBreakReason}
+                onChange={(e) => setCustomBreakReason(e.target.value)}
+                placeholder="e.g. Workshop tooling inspection"
+                className="w-full text-xs rounded-xl border border-slate-300 p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setBreakModalOpen(false)}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!customBreakReason.trim()}
+                onClick={() => handleUpdateAvailability('ON_BREAK', customBreakReason.trim())}
+                className="px-4 py-2 rounded-xl bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-bold disabled:opacity-50 transition-all"
+              >
+                Confirm Break
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

@@ -61,6 +61,15 @@ export function initSocketServer(httpServer: HTTPServer): Server {
       socket.leave(`request:${requestId}`);
     });
 
+    // Emergency incident live room
+    socket.on('emergency:join', (emergencyId: string) => {
+      socket.join(`emergency:${emergencyId}`);
+    });
+
+    socket.on('emergency:leave', (emergencyId: string) => {
+      socket.leave(`emergency:${emergencyId}`);
+    });
+
     socket.on('disconnect', () => {
       // Automatic cleanup handled by socket.io
     });
@@ -90,7 +99,97 @@ export function emitRequestUpdated(requestId: string, payload: any): void {
   }
 }
 
+export function emitRequestLocationUpdated(requestId: string, payload: {
+  requestId: string;
+  latitude: number;
+  longitude: number;
+  remainingDistanceKm?: number;
+  etaMinutes?: number;
+  updatedAt: Date | string;
+}): void {
+  if (!io) return;
+  io.to(`request:${requestId}`).emit('request:location_updated', payload);
+  io.to('role:admin').emit('request:location_updated', payload);
+}
+
 export function emitNotification(userId: string, notification: any): void {
   if (!io) return;
   io.to(`user:${userId}`).emit('notification', notification);
+}
+
+export function emitMechanicAvailabilityUpdated(payload: {
+  mechanicId: string;
+  availability: string;
+  available: boolean;
+  breakReason?: string | null;
+  lastActiveAt?: Date | null;
+}): void {
+  if (!io) return;
+  io.to('role:admin').emit('mechanic:availability_updated', payload);
+  io.to(`user:${payload.mechanicId}`).emit('mechanic:availability_updated', payload);
+  io.emit('mechanic:availability_updated', payload);
+}
+
+// Emergency Assistance Real-Time Broadcasts
+export function emitEmergencyCreated(payload: any): void {
+  if (!io) return;
+  // Notify admins
+  io.to('role:admin').emit('emergency:created', payload);
+  // If targeted to a mechanic, notify them immediately
+  if (payload.assignedMechanicId) {
+    io.to(`user:${payload.assignedMechanicId}`).emit('emergency:incoming_alert', payload);
+  }
+  // Also emit to the customer's personal room
+  if (payload.customerId) {
+    io.to(`user:${payload.customerId}`).emit('emergency:created', payload);
+  }
+}
+
+export function emitEmergencyAccepted(emergencyId: string, payload: any): void {
+  if (!io) return;
+  io.to(`emergency:${emergencyId}`).emit('emergency:accepted', payload);
+  io.to('role:admin').emit('emergency:accepted', payload);
+  if (payload.customerId) {
+    io.to(`user:${payload.customerId}`).emit('emergency:accepted', payload);
+  }
+  if (payload.assignedMechanicId) {
+    io.to(`user:${payload.assignedMechanicId}`).emit('emergency:accepted', payload);
+  }
+}
+
+export function emitEmergencyStatusUpdated(emergencyId: string, payload: any): void {
+  if (!io) return;
+  io.to(`emergency:${emergencyId}`).emit('emergency:status_updated', payload);
+  io.to('role:admin').emit('emergency:status_updated', payload);
+  if (payload.customerId) {
+    io.to(`user:${payload.customerId}`).emit('emergency:status_updated', payload);
+  }
+  if (payload.assignedMechanicId) {
+    io.to(`user:${payload.assignedMechanicId}`).emit('emergency:status_updated', payload);
+  }
+}
+
+export function emitEmergencyLocationUpdated(emergencyId: string, payload: {
+  emergencyId: string;
+  latitude: number;
+  longitude: number;
+  remainingDistanceKm?: number;
+  etaMinutes?: number;
+  updatedAt: Date | string;
+}): void {
+  if (!io) return;
+  io.to(`emergency:${emergencyId}`).emit('emergency:location_updated', payload);
+  io.to('role:admin').emit('emergency:location_updated', payload);
+}
+
+export function emitEmergencyCancelled(emergencyId: string, payload: any): void {
+  if (!io) return;
+  io.to(`emergency:${emergencyId}`).emit('emergency:cancelled', payload);
+  io.to('role:admin').emit('emergency:cancelled', payload);
+  if (payload.customerId) {
+    io.to(`user:${payload.customerId}`).emit('emergency:cancelled', payload);
+  }
+  if (payload.assignedMechanicId) {
+    io.to(`user:${payload.assignedMechanicId}`).emit('emergency:cancelled', payload);
+  }
 }

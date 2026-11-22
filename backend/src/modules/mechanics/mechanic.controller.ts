@@ -1,11 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { Role, RequestStatus, MechanicStatus } from '@prisma/client';
+import { Role, RequestStatus, MechanicStatus, MechanicAvailability } from '@prisma/client';
 import { prisma } from '../../config/db.js';
 import { AuthenticatedRequest, TokenPayload } from '../../types/index.js';
 import { generateTokens } from '../auth/auth.controller.js';
 import { logAudit } from '../../services/audit/audit.service.js';
+import { emitMechanicAvailabilityUpdated } from '../../services/socket.js';
 import { env } from '../../config/env.js';
 
 export async function listMechanics(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
@@ -402,7 +403,7 @@ export async function toggleAvailability(req: AuthenticatedRequest, res: Respons
       return;
     }
 
-    const { available } = req.body;
+    const { available, availability, breakReason } = req.body;
 
     const profile = await prisma.mechanicProfile.findUnique({
       where: { userId: req.user.userId },
@@ -413,12 +414,45 @@ export async function toggleAvailability(req: AuthenticatedRequest, res: Respons
       return;
     }
 
+    // Determine target availability status
+    let targetAvailability: MechanicAvailability;
+    if (availability && Object.values(MechanicAvailability).includes(availability)) {
+      targetAvailability = availability as MechanicAvailability;
+    } else if (typeof available === 'boolean') {
+      targetAvailability = available ? MechanicAvailability.AVAILABLE : MechanicAvailability.OFFLINE;
+    } else {
+      targetAvailability = profile.availability;
+    }
+
+    const isAvailable = targetAvailability === MechanicAvailability.AVAILABLE;
+
     const updated = await prisma.mechanicProfile.update({
       where: { id: profile.id },
-      data: { available: Boolean(available) },
+      data: {
+        availability: targetAvailability,
+        available: isAvailable,
+        breakReason: targetAvailability === MechanicAvailability.ON_BREAK ? breakReason || 'Break' : null,
+        lastActiveAt: new Date(),
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, phone: true } },
+        garage: { select: { id: true, name: true, city: true } },
+      },
     });
 
-    res.json({ message: 'Availability updated', profile: updated });
+    // Broadcast live availability to Admin, Garage Owner, and all subscribers
+    emitMechanicAvailabilityUpdated({
+      mechanicId: req.user.userId,
+      availability: targetAvailability,
+      available: isAvailable,
+      breakReason: updated.breakReason,
+      lastActiveAt: updated.lastActiveAt,
+    });
+
+    res.json({
+      message: `Availability updated to ${targetAvailability}`,
+      profile: updated,
+    });
   } catch (err) {
     next(err);
   }

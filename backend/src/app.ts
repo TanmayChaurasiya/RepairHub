@@ -20,6 +20,7 @@ import complaintRoutes from './modules/complaints/complaint.routes.js';
 import analyticsRoutes from './modules/analytics/analytics.routes.js';
 import garageOwnerRoutes from './modules/garageOwner/garageOwner.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
+import emergencyRoutes from './modules/emergency/emergency.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -33,11 +34,13 @@ export function createApp(): Express {
   );
 
 
+
   app.use(
     cors({
       origin: [
         env.CORS_ORIGIN,
         'https://repair-hub-ecru.vercel.app',
+        'https://repairhub-mobile-frontend.vercel.app',
         'https://repair-4d27v0bfo-tanmay-chaurasiya-s-projects.vercel.app',
         'http://localhost:3000',
         'http://127.0.0.1:3000',
@@ -47,6 +50,7 @@ export function createApp(): Express {
       allowedHeaders: ['Content-Type', 'Authorization'],
     })
   );
+
 
 
   app.use(express.json({ limit: '10mb' }));
@@ -82,6 +86,7 @@ export function createApp(): Express {
   app.use('/api/analytics', analyticsRoutes);
   app.use('/api/garage', garageOwnerRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/emergency', emergencyRoutes);
 
   // 404 handler
   app.use((req: Request, res: Response) => {

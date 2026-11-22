@@ -19,6 +19,10 @@ import {
   CheckCircle2,
   PlusCircle,
   ClipboardList,
+  Mail,
+  History,
+  UserCheck,
+  ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getSocket } from '../../lib/socket';
@@ -78,10 +82,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       { label: 'My Repairs', href: '/customer', icon: LayoutDashboard },
       { label: 'Book Repair', href: '/customer/new-request', icon: PlusCircle },
       { label: 'My Vehicles', href: '/customer/vehicles', icon: Car },
+      { label: 'Roadside SOS', href: '/customer/emergency', icon: ShieldAlert },
     ];
   } else if (user.role === 'MECHANIC') {
     navItems = [
       { label: 'Assigned Jobs', href: '/mechanic', icon: ClipboardList },
+      { label: 'Roadside SOS', href: '/mechanic/emergency', icon: ShieldAlert },
     ];
   } else if (user.role === 'GARAGE') {
     navItems = [
@@ -89,13 +95,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       { label: 'Bookings', href: '/garage/bookings', icon: ClipboardList },
       { label: 'Mechanic Team', href: '/garage/mechanics', icon: Users },
       { label: 'Garage Profile', href: '/garage/profile', icon: Building2 },
+      { label: 'Roadside SOS', href: '/garage/emergency', icon: ShieldAlert },
     ];
   } else if (user.role === 'ADMIN') {
     navItems = [
       { label: 'Overview', href: '/admin', icon: LayoutDashboard },
+      { label: 'Emergency Command', href: '/admin/emergency', icon: ShieldAlert },
       { label: 'All Garages', href: '/admin/garages', icon: Building2 },
       { label: 'Mechanics', href: '/admin/mechanics', icon: Users },
+      { label: 'Customer Vehicles', href: '/admin/vehicles', icon: Car },
       { label: 'All Repairs', href: '/admin/requests', icon: Wrench },
+      { label: 'Assignment History', href: '/admin/assignment-history', icon: History },
+      { label: 'Email Notifications', href: '/admin/email-notifications', icon: Mail },
+      { label: 'Customer Accounts', href: '/admin/customers', icon: UserCheck },
       { label: 'Audit Logs', href: '/admin/audit-logs', icon: FileText },
       { label: 'Complaints', href: '/admin/complaints', icon: AlertCircle },
     ];

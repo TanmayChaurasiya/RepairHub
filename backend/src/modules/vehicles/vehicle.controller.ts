@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { Role } from '@prisma/client';
 import { prisma } from '../../config/db.js';
 import { AuthenticatedRequest } from '../../types/index.js';
+import { checkAndSendVehicleAvailabilityEmail } from '../../services/email/vehicleAvailabilityEmail.service.js';
 
 export async function listVehicles(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -94,6 +95,11 @@ export async function createVehicle(req: AuthenticatedRequest, res: Response, ne
         year,
         regNo,
       },
+    });
+
+    // Asynchronously trigger automated vehicle availability notification (non-blocking)
+    checkAndSendVehicleAvailabilityEmail(vehicle.id, req.user.userId).catch((err) => {
+      console.error('[VEHICLE REGISTRATION] Background availability email error:', err?.message);
     });
 
     res.status(201).json({ message: 'Vehicle added successfully', vehicle });

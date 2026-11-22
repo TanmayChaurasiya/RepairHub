@@ -18,6 +18,9 @@ import {
   ArrowRight,
   ShieldAlert,
   Sparkles,
+  Navigation,
+  Radio,
+  MapPin,
 } from 'lucide-react';
 import { AppLayout } from '../../../../components/layout/AppLayout';
 import { StatusBadge } from '../../../../components/common/StatusBadge';
@@ -42,7 +45,63 @@ export default function MechanicJobDetailPage() {
   const [transitioning, setTransitioning] = useState(false);
   const [estimateModalOpen, setEstimateModalOpen] = useState(false);
 
+  // Live Journey GPS Sharing States
+  const [sharingLocation, setSharingLocation] = useState(false);
+  const [watchId, setWatchId] = useState<number | null>(null);
+  const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [routeEta, setRouteEta] = useState<number | null>(null);
+  const [routeDistance, setRouteDistance] = useState<number | null>(null);
+
   const { success, error } = useToast();
+
+  const startJourney = () => {
+    if (!navigator.geolocation) {
+      error('Geolocation is not supported by this browser.');
+      return;
+    }
+
+    const wid = navigator.geolocation.watchPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setCurrentCoords({ lat, lng });
+
+        try {
+          const res = await api.patch<any>(`/requests/${id}/location`, {
+            latitude: lat,
+            longitude: lng,
+          });
+          if (res.etaMinutes) setRouteEta(res.etaMinutes);
+          if (res.remainingDistanceKm) setRouteDistance(res.remainingDistanceKm);
+        } catch (e) {
+          // ignore transient patch failure
+        }
+      },
+      (err) => {
+        console.warn('Geolocation watch error:', err.message);
+        error('Could not access GPS. Please ensure location permissions are granted.');
+        setSharingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 4000,
+        timeout: 10000,
+      }
+    );
+
+    setWatchId(wid);
+    setSharingLocation(true);
+    success('Live Journey started! GPS broadcast active for customer and workshop.');
+  };
+
+  const stopJourney = () => {
+    if (watchId !== null) {
+      navigator.geolocation.clearWatch(watchId);
+      setWatchId(null);
+    }
+    setSharingLocation(false);
+    success('Live Journey stopped.');
+  };
 
   const fetchJob = async () => {
     try {
@@ -228,6 +287,68 @@ export default function MechanicJobDetailPage() {
           currentStatus={job.status}
           history={job.statusHistory}
         />
+
+        {/* Live Journey & GPS Tracking Broadcast */}
+        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full ${sharingLocation ? 'bg-emerald-500 animate-ping' : 'bg-slate-300'}`} />
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+                  {sharingLocation ? 'Broadcasting Real-Time Location' : 'Satellite Journey Sharing'}
+                </span>
+              </div>
+              <h3 className="text-base font-black text-navy-900 flex items-center gap-2">
+                <Navigation className="w-5 h-5 text-brand-orange" />
+                Live Mechanic Journey Sharing (Ola/Uber Style)
+              </h3>
+              <p className="text-xs text-slate-500">
+                Share your real-time GPS location with customer and admin while traveling to customer or workshop.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {sharingLocation ? (
+                <button
+                  type="button"
+                  onClick={stopJourney}
+                  className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black shadow-md shadow-red-600/20 flex items-center gap-2 transition-all"
+                >
+                  <Radio className="w-4 h-4 animate-pulse" />
+                  Stop Journey Broadcast
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={startJourney}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-md shadow-blue-600/20 flex items-center gap-2 transition-all"
+                >
+                  <Navigation className="w-4 h-4" />
+                  Start Journey &amp; Share GPS
+                </button>
+              )}
+            </div>
+          </div>
+
+          {sharingLocation && (
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5">
+                <span className="w-3 h-3 rounded-full bg-emerald-600 animate-ping" />
+                <span className="font-bold">
+                  Satellite GPS Active: {currentCoords ? `${currentCoords.lat.toFixed(4)}, ${currentCoords.lng.toFixed(4)}` : 'Detecting...'}
+                </span>
+              </div>
+              <div className="flex items-center gap-4 text-xs font-medium">
+                {routeDistance !== null && (
+                  <span>Remaining Distance: <strong>{routeDistance} km</strong></span>
+                )}
+                {routeEta !== null && (
+                  <span>Estimated Arrival: <strong className="text-brand-orange">~{routeEta} mins</strong></span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Progress Stepper & Action Controls for Mechanic */}
         <div className="bg-navy-900 text-white rounded-3xl p-6 shadow-xl border border-navy-800 space-y-4">

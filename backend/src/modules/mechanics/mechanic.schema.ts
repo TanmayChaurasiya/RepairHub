@@ -11,7 +11,9 @@ export const createMechanicSchema = z.object({
 });
 
 export const updateAvailabilitySchema = z.object({
-  available: z.boolean(),
+  available: z.boolean().optional(),
+  availability: z.enum(['AVAILABLE', 'BUSY', 'OFFLINE', 'ON_BREAK']).optional(),
+  breakReason: z.string().max(200).optional().nullable(),
 });
 
 export const updateSkillsSchema = z.object({

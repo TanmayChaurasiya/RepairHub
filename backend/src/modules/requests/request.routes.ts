@@ -10,6 +10,7 @@ import {
   transitionStatus,
   updateDiagnosis,
   uploadRequestPhotos,
+  updateMechanicLocation,
 } from './request.controller.js';
 import {
   createRequestSchema,
@@ -45,5 +46,8 @@ router.put('/:id/diagnosis', authorizeRoles(Role.MECHANIC), validateBody(updateD
 
 // Photo upload
 router.post('/:id/photos', upload.array('photos', 5), uploadRequestPhotos);
+
+// Live mechanic GPS location streaming
+router.patch('/:id/location', authorizeRoles(Role.MECHANIC, Role.ADMIN), updateMechanicLocation);
 
 export default router;
