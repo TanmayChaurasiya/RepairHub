@@ -34,7 +34,6 @@ export function createApp(): Express {
   );
 
 
-
   app.use(
     cors({
       origin: [
