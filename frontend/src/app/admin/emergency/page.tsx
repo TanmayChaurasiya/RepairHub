@@ -276,8 +276,8 @@ export default function AdminEmergencyPage() {
                           {inc.pickupAddress}
                         </p>
                         <span className="text-[10px] text-slate-400 font-mono">
-                          {(inc.pickupLatitude ?? inc.latitude) != null
-                            ? `${(inc.pickupLatitude ?? inc.latitude).toFixed(4)}, ${(inc.pickupLongitude ?? inc.longitude).toFixed(4)}`
+                          {(inc.pickupLatitude ?? inc.latitude) != null && (inc.pickupLongitude ?? inc.longitude) != null
+                            ? `${Number(inc.pickupLatitude ?? inc.latitude).toFixed(4)}, ${Number(inc.pickupLongitude ?? inc.longitude).toFixed(4)}`
                             : 'GPS recorded'}
                         </span>
                       </td>

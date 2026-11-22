@@ -359,7 +359,7 @@ export default function AdminRequestDetailPage() {
                           Rank #{idx + 1} Best Match
                         </span>
                         <span className="text-xs font-mono font-black text-brand-cyan">
-                          Score: {sugg.score.toFixed(2)}
+                          Score: {Number(sugg.score ?? 0).toFixed(2)}
                         </span>
                       </div>
 
@@ -369,7 +369,7 @@ export default function AdminRequestDetailPage() {
                         <div className="flex items-center justify-between">
                           <span className="flex items-center gap-1 text-amber-400">
                             <Star className="w-3.5 h-3.5 fill-amber-400" />
-                            {sugg.rating.toFixed(1)} / 5.0
+                            {Number(sugg.rating ?? 5.0).toFixed(1)} / 5.0
                           </span>
                           <span className="text-slate-400">
                             Active Jobs: <strong>{sugg.activeJobCount}</strong>
@@ -785,7 +785,7 @@ export default function AdminRequestDetailPage() {
                           <div className="flex items-center justify-between">
                             <span className="font-extrabold text-navy-900">{mech.name}</span>
                             <span className="text-[11px] font-mono font-bold text-brand-orange">
-                              ★ {mech.rating.toFixed(1)} | Score: {mech.score.toFixed(1)}
+                              ★ {Number(mech.rating ?? 5.0).toFixed(1)} | Score: {Number(mech.score ?? 0).toFixed(1)}
                             </span>
                           </div>
                           <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">

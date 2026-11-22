@@ -631,7 +631,7 @@ export default function AdminGaragesPage() {
                               {m.availability || (m.available ? 'AVAILABLE' : 'OFFLINE')}
                             </span>
                             <span className="block text-[10px] text-slate-400 font-bold">
-                              ★ {m.rating.toFixed(1)}
+                              ★ {Number(m.rating ?? 5.0).toFixed(1)}
                             </span>
                           </div>
                         </div>
@@ -957,7 +957,7 @@ export default function AdminGaragesPage() {
                               {m.availability || (m.available ? 'AVAILABLE' : 'OFFLINE')}
                             </span>
                             <span className="block text-[10px] text-slate-400 font-bold">
-                              ★ {m.rating.toFixed(1)}
+                              ★ {Number(m.rating ?? 5.0).toFixed(1)}
                             </span>
                           </div>
                         </div>
