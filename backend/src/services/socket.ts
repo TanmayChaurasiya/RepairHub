@@ -13,7 +13,14 @@ let io: Server | null = null;
 export function initSocketServer(httpServer: HTTPServer): Server {
   io = new Server(httpServer, {
     cors: {
-      origin: [env.CORS_ORIGIN, 'http://localhost:3000', 'http://127.0.0.1:3000'],
+      origin: [
+        env.CORS_ORIGIN,
+        'https://repair-hub-ecru.vercel.app',
+        'https://repairhub-mobile-frontend.vercel.app',
+        'https://repair-4d27v0bfo-tanmay-chaurasiya-s-projects.vercel.app',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+      ],
       credentials: true,
     },
   });

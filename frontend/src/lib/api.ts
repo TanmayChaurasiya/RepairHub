@@ -1,4 +1,6 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  'https://repairhub-backend-iftr.onrender.com/api';
 
 class ApiClient {
   private isRefreshing = false;

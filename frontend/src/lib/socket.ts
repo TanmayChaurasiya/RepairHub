@@ -15,7 +15,9 @@ export function getSocket(): Socket | null {
   }
 
   if (!socket) {
-    const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
+    const SOCKET_URL =
+      process.env.NEXT_PUBLIC_SOCKET_URL ||
+      'https://repairhub-backend-iftr.onrender.com';
     socket = io(SOCKET_URL, {
       auth: { token },
       autoConnect: true,
