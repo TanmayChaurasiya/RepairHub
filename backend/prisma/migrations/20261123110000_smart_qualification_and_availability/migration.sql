@@ -1,6 +1,9 @@
 -- CreateEnum
-CREATE TYPE "PowertrainType" AS ENUM ('PETROL', 'DIESEL', 'ELECTRIC', 'HYBRID', 'CNG', 'OTHER');
-
+DO $$ BEGIN
+    CREATE TYPE "PowertrainType" AS ENUM ('PETROL', 'DIESEL', 'ELECTRIC', 'HYBRID', 'CNG', 'OTHER');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 -- AlterEnum
 ALTER TYPE "EmailNotificationType" ADD VALUE IF NOT EXISTS 'MECHANIC_CURRENTLY_BUSY';
 ALTER TYPE "EmailNotificationType" ADD VALUE IF NOT EXISTS 'NO_QUALIFIED_MECHANIC';
