@@ -6,6 +6,14 @@ import { validateTransition } from '../../services/stateMachine.js';
 import { rankMechanicsForRequest, MechanicCandidate } from '../../services/assignment.js';
 import { emitRequestUpdated, emitMechanicAvailabilityUpdated, emitRequestLocationUpdated } from '../../services/socket.js';
 import { storageProvider } from '../../services/storage/index.js';
+import {
+  deriveRequiredSkills,
+  inferPowertrainFromVehicle,
+  verifyGarageEligibility,
+  findBestEligibleGarageAndMechanic,
+  assignMechanicTransactionally,
+  sendVerifiedServiceOutcomeEmail,
+} from '../../services/qualification/qualification.service.js';
 
 export async function createRequest(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -39,28 +47,143 @@ export async function createRequest(req: AuthenticatedRequest, res: Response, ne
     const count = await prisma.repairRequest.count();
     const requestNumber = `REQ-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
 
+    // 1. Intake: Infer powertrain and derive required skills dynamically from editable table
+    const powertrain = inferPowertrainFromVehicle(vehicle);
+    const skillAnalysis = await deriveRequiredSkills(category, powertrain, description);
+    const requiredSkills = skillAnalysis.requiredSkills;
+
+    // 2. Initial verification of target garage (status, vehicle support, skill match, availability)
+    const garageVerification = await verifyGarageEligibility({
+      garageId,
+      vehicleType: vehicle.type,
+      powertrain,
+      requiredSkills,
+    });
+
+    let assignedMechanicId: string | null = null;
+    let initialStatus: RequestStatus = RequestStatus.SUBMITTED;
+    let eligibilityStatus = garageVerification.eligibilityStatus;
+    let unavailabilityReason: string | null = garageVerification.unavailabilityReason || null;
+    let effectiveGarageId = garageId;
+    let estimatedWaitMinutes = 0;
+
+    // 3. Fallback search if target garage is closed, unapproved, unsupported, or has no qualified free mechanics
+    if (
+      garageVerification.eligibilityStatus === 'QUALIFIED_AND_FREE' &&
+      garageVerification.qualifiedFreeMechanics.length > 0
+    ) {
+      assignedMechanicId = garageVerification.qualifiedFreeMechanics[0].mechanicId;
+      initialStatus = RequestStatus.ASSIGNED;
+      unavailabilityReason = null;
+    } else {
+      // Execute fallback search across network
+      const fallback = await findBestEligibleGarageAndMechanic({
+        vehicleType: vehicle.type,
+        powertrain,
+        requiredSkills,
+        preferredGarageId: garageId,
+      });
+
+      if (fallback.overallStatus === 'QUALIFIED_AND_FREE' && fallback.selectedMechanic) {
+        effectiveGarageId = fallback.selectedMechanic.garageId;
+        assignedMechanicId = fallback.selectedMechanic.mechanicId;
+        initialStatus = RequestStatus.ASSIGNED;
+        eligibilityStatus = 'QUALIFIED_AND_FREE';
+        unavailabilityReason = null;
+      } else {
+        eligibilityStatus = fallback.overallStatus;
+        unavailabilityReason = fallback.unavailabilityReason;
+        if (fallback.overallStatus === 'CURRENTLY_BUSY') {
+          estimatedWaitMinutes = 45;
+        }
+      }
+    }
+
     const newRequest = await prisma.repairRequest.create({
       data: {
         requestNumber,
         customerId: req.user.userId,
         vehicleId,
-        garageId,
+        garageId: effectiveGarageId,
+        mechanicId: assignedMechanicId,
         category,
         description,
         photos: photos || [],
-        status: RequestStatus.SUBMITTED,
+        status: initialStatus,
+        eligibilityStatus,
+        unavailabilityReason,
+        requiredSkills,
+        estimatedWaitMinutes: estimatedWaitMinutes > 0 ? estimatedWaitMinutes : null,
         statusHistory: {
           create: {
             fromStatus: null,
-            toStatus: RequestStatus.SUBMITTED,
+            toStatus: initialStatus,
             actorId: req.user.userId,
             actorRole: req.user.role,
-            note: 'Repair request submitted by vehicle owner',
+            note: assignedMechanicId
+              ? `Repair request submitted and allocated to qualified specialist`
+              : `Repair request submitted (${eligibilityStatus}: ${unavailabilityReason})`,
           },
         },
       },
       include: FULL_REQUEST_INCLUDE,
     });
+
+    // If a mechanic was assigned, atomically update mechanic state & log assignment history
+    if (assignedMechanicId) {
+      await prisma.mechanicProfile.updateMany({
+        where: { userId: assignedMechanicId },
+        data: { availability: MechanicAvailability.BUSY, available: false },
+      });
+
+      await prisma.assignmentHistory.create({
+        data: {
+          requestId: newRequest.id,
+          previousMechanicId: null,
+          newMechanicId: assignedMechanicId,
+          assignedById: req.user.userId,
+          assignedByRole: req.user.role,
+          action: 'ASSIGNED',
+          checkResult: 'PASS',
+          reason: `Initial verified qualified allocation for skills: ${requiredSkills.join(', ')}`,
+        },
+      });
+
+      // Send Template 1: MECHANIC_AVAILABLE
+      sendVerifiedServiceOutcomeEmail({
+        requestId: newRequest.id,
+        customerId: req.user.userId,
+        status: 'QUALIFIED_AND_FREE',
+        assignedMechanic: {
+          name: newRequest.mechanic?.name || 'Assigned Specialist',
+          garageName: newRequest.garage.name,
+          skills: requiredSkills,
+        },
+      }).catch((e) => console.error('[EMAIL ERROR]', e));
+    } else {
+      // Log check result in AssignmentHistory
+      await prisma.assignmentHistory.create({
+        data: {
+          requestId: newRequest.id,
+          previousMechanicId: null,
+          newMechanicId: null,
+          assignedById: req.user.userId,
+          assignedByRole: req.user.role,
+          action: 'UNAVAILABILITY_LOGGED',
+          checkResult: eligibilityStatus === 'CURRENTLY_BUSY' ? 'FAIL_BUSY' : 'FAIL_NO_QUALIFIED',
+          reason: unavailabilityReason || 'No qualified specialist currently available',
+        },
+      });
+
+      // Send Template 2 (Currently Busy) or Template 3 (No Qualified Mechanic Available)
+      sendVerifiedServiceOutcomeEmail({
+        requestId: newRequest.id,
+        customerId: req.user.userId,
+        status: eligibilityStatus === 'CURRENTLY_BUSY' ? 'CURRENTLY_BUSY' : 'NO_QUALIFIED_MECHANIC',
+        unavailabilityReason: unavailabilityReason || undefined,
+        estimatedWaitMinutes: 45,
+      }).catch((e) => console.error('[EMAIL ERROR]', e));
+    }
 
     emitRequestUpdated(newRequest.id, newRequest);
 
@@ -165,6 +288,14 @@ export const FULL_REQUEST_INCLUDE = {
     orderBy: { createdAt: 'desc' as const },
     include: { resolvedBy: { select: { id: true, name: true } } },
   },
+  assignmentHistories: {
+    orderBy: { createdAt: 'desc' as const },
+    include: {
+      previousMechanic: { select: { id: true, name: true, email: true } },
+      newMechanic: { select: { id: true, name: true, email: true } },
+      assignedBy: { select: { id: true, name: true, role: true } },
+    },
+  },
 };
 
 export async function getRequestById(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
@@ -209,7 +340,7 @@ export async function getMechanicSuggestions(req: AuthenticatedRequest, res: Res
 
     const request = await prisma.repairRequest.findUnique({
       where: { id },
-      include: { garage: true },
+      include: { garage: true, vehicle: true },
     });
 
     if (!request) {
@@ -217,51 +348,63 @@ export async function getMechanicSuggestions(req: AuthenticatedRequest, res: Res
       return;
     }
 
-    // Fetch all mechanics
-    const mechanics = await prisma.mechanicProfile.findMany({
-      include: {
-        user: { select: { id: true, name: true } },
-        garage: true,
-      },
+    const powertrain = inferPowertrainFromVehicle(request.vehicle);
+    const skillAnalysis = await deriveRequiredSkills(request.category, powertrain, request.description);
+    const requiredSkills =
+      request.requiredSkills && request.requiredSkills.length > 0
+        ? request.requiredSkills
+        : skillAnalysis.requiredSkills;
+
+    // Verify selected garage
+    const targetGarageVerification = await verifyGarageEligibility({
+      garageId: request.garageId,
+      vehicleType: request.vehicle.type,
+      powertrain,
+      requiredSkills,
     });
 
-    const activeStatuses: RequestStatus[] = [
-      RequestStatus.ASSIGNED,
-      RequestStatus.INSPECTING,
-      RequestStatus.ESTIMATE_SENT,
-      RequestStatus.APPROVED,
-      RequestStatus.IN_PROGRESS,
-      RequestStatus.QC,
-    ];
+    // Run fallback search across other approved garages
+    const fallbackAnalysis = await findBestEligibleGarageAndMechanic({
+      vehicleType: request.vehicle.type,
+      powertrain,
+      requiredSkills,
+      preferredGarageId: request.garageId,
+    });
 
-    const candidates: MechanicCandidate[] = await Promise.all(
-      mechanics.map(async (m) => {
-        const activeJobCount = await prisma.repairRequest.count({
-          where: {
-            mechanicId: m.userId,
-            status: { in: activeStatuses },
-          },
-        });
-
-        return {
-          id: m.userId,
-          name: m.user.name,
-          rating: m.rating,
-          skills: m.skills,
-          available: m.available && m.availability === MechanicAvailability.AVAILABLE && m.status === 'ACTIVE',
-          garageVerified: m.garage.isVerified,
-          garageCity: m.garage.city,
-          activeJobCount,
-        };
-      })
-    );
-
-    const suggestions = rankMechanicsForRequest(request.category, candidates, request.garage.city);
+    // Format suggestions
+    const suggestions = targetGarageVerification.qualifiedFreeMechanics.map((m, idx) => ({
+      mechanicId: m.mechanicId,
+      name: m.name,
+      rating: m.rating,
+      activeJobCount: m.activeJobCount,
+      score: m.rating * 1.0 - m.activeJobCount * 0.5,
+      scoreBreakdown: { baseRating: m.rating, workloadPenalty: m.activeJobCount * 0.5 },
+      reasons: [
+        `Verified qualified in: ${requiredSkills.join(', ')}`,
+        `Rating: ${m.rating.toFixed(1)} / 5.0`,
+        `Active jobs: ${m.activeJobCount}`,
+      ],
+      garageName: m.garageName,
+    }));
 
     res.json({
+      requestId: request.id,
       requestCategory: request.category,
+      powertrain,
+      requiredSkills,
       city: request.garage.city,
+      eligibilityStatus: targetGarageVerification.eligibilityStatus,
+      unavailabilityReason:
+        targetGarageVerification.unavailabilityReason || fallbackAnalysis.unavailabilityReason,
+      targetGarage: {
+        id: request.garage.id,
+        name: request.garage.name,
+        verification: targetGarageVerification,
+      },
       suggestions,
+      qualifiedFreeMechanics: targetGarageVerification.qualifiedFreeMechanics,
+      qualifiedBusyMechanics: targetGarageVerification.qualifiedBusyMechanics,
+      allGarageResults: fallbackAnalysis.allGarageResults,
     });
   } catch (err) {
     next(err);
@@ -280,7 +423,7 @@ export async function assignMechanic(req: AuthenticatedRequest, res: Response, n
 
     const request = await prisma.repairRequest.findUnique({
       where: { id },
-      include: { garage: true },
+      include: { garage: true, vehicle: true },
     });
 
     if (!request) {
@@ -295,57 +438,34 @@ export async function assignMechanic(req: AuthenticatedRequest, res: Response, n
       return;
     }
 
+    const powertrain = inferPowertrainFromVehicle(request.vehicle);
+    const skillAnalysis = await deriveRequiredSkills(request.category, powertrain, request.description);
+    const requiredSkills =
+      request.requiredSkills && request.requiredSkills.length > 0
+        ? request.requiredSkills
+        : skillAnalysis.requiredSkills;
+
     let targetMechanicId = mechanicId;
 
     if (autoAssign) {
-      // Find candidate mechanics and pick the top ranked one
-      const mechanics = await prisma.mechanicProfile.findMany({
-        include: {
-          user: { select: { id: true, name: true } },
-          garage: true,
-        },
+      const fallbackAnalysis = await findBestEligibleGarageAndMechanic({
+        vehicleType: request.vehicle.type,
+        powertrain,
+        requiredSkills,
+        preferredGarageId: request.garageId,
       });
 
-      const activeStatuses: RequestStatus[] = [
-        RequestStatus.ASSIGNED,
-        RequestStatus.INSPECTING,
-        RequestStatus.ESTIMATE_SENT,
-        RequestStatus.APPROVED,
-        RequestStatus.IN_PROGRESS,
-        RequestStatus.QC,
-      ];
-
-      const candidates: MechanicCandidate[] = await Promise.all(
-        mechanics.map(async (m) => {
-          const activeJobCount = await prisma.repairRequest.count({
-            where: {
-              mechanicId: m.userId,
-              status: { in: activeStatuses },
-            },
-          });
-
-          return {
-            id: m.userId,
-            name: m.user.name,
-            rating: m.rating,
-            skills: m.skills,
-            available: m.available && m.availability === MechanicAvailability.AVAILABLE && m.status === 'ACTIVE',
-            garageVerified: m.garage.isVerified,
-            garageCity: m.garage.city,
-            activeJobCount,
-          };
-        })
-      );
-
-      const suggestions = rankMechanicsForRequest(request.category, candidates, request.garage.city);
-      if (suggestions.length === 0) {
+      if (fallbackAnalysis.overallStatus !== 'QUALIFIED_AND_FREE' || !fallbackAnalysis.selectedMechanic) {
         res.status(400).json({
-          error: 'No available verified mechanics matching category skills found for auto-assignment.',
+          error:
+            fallbackAnalysis.unavailabilityReason ||
+            'No qualified, free technician matching required skills found for auto-assignment.',
+          eligibilityStatus: fallbackAnalysis.overallStatus,
         });
         return;
       }
 
-      targetMechanicId = suggestions[0].mechanicId;
+      targetMechanicId = fallbackAnalysis.selectedMechanic.mechanicId;
     }
 
     if (!targetMechanicId) {
@@ -353,44 +473,26 @@ export async function assignMechanic(req: AuthenticatedRequest, res: Response, n
       return;
     }
 
-    // Verify mechanic exists and has MECHANIC role
-    const mechanicUser = await prisma.user.findFirst({
-      where: { id: targetMechanicId, role: Role.MECHANIC },
+    // Execute transactional assignment with atomic recheck (double-booking prevention)
+    const assignmentResult = await assignMechanicTransactionally({
+      requestId: id,
+      targetMechanicId,
+      garageId: request.garageId,
+      assignedById: req.user.userId,
+      assignedByRole: req.user.role,
+      reason: note || 'Master Admin manual mechanic allocation',
+      requiredSkills,
     });
 
-    if (!mechanicUser) {
-      res.status(404).json({ error: 'Mechanic not found or invalid role.' });
+    if (!assignmentResult.success) {
+      res.status(409).json({
+        error:
+          assignmentResult.unavailabilityReason ||
+          'Mechanic could not be assigned due to concurrent booking or capacity constraints.',
+        eligibilityStatus: assignmentResult.eligibilityStatus,
+      });
       return;
     }
-
-    await prisma.repairRequest.update({
-      where: { id },
-      data: {
-        mechanicId: targetMechanicId,
-        status: RequestStatus.ASSIGNED,
-        statusHistory: {
-          create: {
-            fromStatus: request.status,
-            toStatus: RequestStatus.ASSIGNED,
-            actorId: req.user.userId,
-            actorRole: req.user.role,
-            note: note || `Assigned to mechanic ${mechanicUser.name}`,
-          },
-        },
-      },
-    });
-
-    // Record in AssignmentHistory
-    await prisma.assignmentHistory.create({
-      data: {
-        requestId: id,
-        previousMechanicId: request.mechanicId,
-        newMechanicId: targetMechanicId,
-        assignedById: req.user.userId,
-        assignedByRole: req.user.role,
-        reason: note || (request.mechanicId ? 'Mechanic reassigned' : 'Initial assignment'),
-      },
-    });
 
     const fullUpdated = await prisma.repairRequest.findUnique({
       where: { id },
@@ -401,14 +503,28 @@ export async function assignMechanic(req: AuthenticatedRequest, res: Response, n
       emitRequestUpdated(id, fullUpdated);
     }
 
+    // Send Template 1: MECHANIC_AVAILABLE email after verified assignment
+    sendVerifiedServiceOutcomeEmail({
+      requestId: id,
+      customerId: request.customerId,
+      status: 'QUALIFIED_AND_FREE',
+      assignedMechanic: {
+        name: fullUpdated?.mechanic?.name || 'Assigned Specialist',
+        garageName: fullUpdated?.garage?.name || request.garage.name,
+        skills: requiredSkills,
+      },
+    }).catch((e) => console.error('[EMAIL ERROR]', e));
+
     res.json({
-      message: `Mechanic ${mechanicUser.name} assigned successfully.`,
+      message: `Mechanic assigned successfully.`,
       request: fullUpdated,
     });
   } catch (err) {
     next(err);
   }
 }
+
+
 
 export async function transitionStatus(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {

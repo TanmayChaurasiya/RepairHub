@@ -24,6 +24,12 @@ import {
   reassignMechanicAdmin,
   getRequestAssignmentHistoryAdmin,
   listAllAssignmentHistoriesAdmin,
+  listIssueSkillMappingsAdmin,
+  createIssueSkillMappingAdmin,
+  updateIssueSkillMappingAdmin,
+  deleteIssueSkillMappingAdmin,
+  listMechanicsPendingReviewAdmin,
+  tagMechanicSkillsAdmin,
 } from './admin.controller.js';
 import { authenticate, requireMasterAdmin } from '../../middleware/auth.js';
 
@@ -60,6 +66,14 @@ router.get('/requests/:id/eligible-mechanics', getEligibleMechanicsForReassignme
 router.post('/requests/:id/reassign', reassignMechanicAdmin);
 router.get('/requests/:id/assignment-history', getRequestAssignmentHistoryAdmin);
 router.get('/assignment-history', listAllAssignmentHistoriesAdmin);
+
+// Dynamic Issue-to-Skill Mappings & Skills Review
+router.get('/issue-skill-mappings', listIssueSkillMappingsAdmin);
+router.post('/issue-skill-mappings', createIssueSkillMappingAdmin);
+router.put('/issue-skill-mappings/:id', updateIssueSkillMappingAdmin);
+router.delete('/issue-skill-mappings/:id', deleteIssueSkillMappingAdmin);
+router.get('/mechanics-pending-review', listMechanicsPendingReviewAdmin);
+router.post('/mechanics/:id/tag-skills', tagMechanicSkillsAdmin);
 
 // Automated Email Notifications Log & Retry
 router.get('/email-notifications', listEmailNotificationsAdmin);

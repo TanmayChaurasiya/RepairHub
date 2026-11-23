@@ -44,6 +44,7 @@ export function createApp(): Express {
         'https://repairhub-mobile-frontend-m21nmsb1f.vercel.app',
         'http://localhost:3000',
         'http://127.0.0.1:3000',
+        /\.trycloudflare\.com$/,
       ],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

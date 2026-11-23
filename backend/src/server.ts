@@ -4,6 +4,7 @@ import { env } from './config/env.js';
 import { initSocketServer } from './services/socket.js';
 import { emailService } from './services/email/mailer.js';
 import { initializeMasterAdmin } from './services/admin/adminInit.service.js';
+import { seedIssueSkillMappingsAndReviewFlags } from './services/qualification/seedIssueSkills.js';
 
 const app = createApp();
 const server = http.createServer(app);
@@ -21,6 +22,11 @@ server.listen(env.PORT, () => {
   // Ensure Master Admin account integrity and purge legacy demo admin
   initializeMasterAdmin().catch((err) => {
     console.error('Failed to initialize Master Admin:', err);
+  });
+
+  // Ensure IssueSkillMappings and SkillsPendingReview flags are seeded
+  seedIssueSkillMappingsAndReviewFlags().catch((err) => {
+    console.error('Failed to seed issue skill mappings:', err);
   });
 
   // Verify Email Service Connection on startup (Brevo REST API or Gmail SMTP)

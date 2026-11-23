@@ -280,15 +280,74 @@ export default function AdminRequestDetailPage() {
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Operations Queue
             </Link>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-2xl font-black text-navy-900 font-mono">
                 {request.requestNumber}
               </h1>
               <StatusBadge status={request.status} />
+
+              {/* Eligibility & Availability Status Badge */}
+              {request.eligibilityStatus && (
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider inline-flex items-center gap-1.5 ${
+                    request.eligibilityStatus === 'QUALIFIED_AND_FREE'
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : request.eligibilityStatus === 'CURRENTLY_BUSY'
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : request.eligibilityStatus === 'SKILLS_PENDING_REVIEW'
+                      ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                      : 'bg-rose-100 text-rose-800 border border-rose-300'
+                  }`}
+                >
+                  {request.eligibilityStatus === 'QUALIFIED_AND_FREE' && '✓ Qualified & Available'}
+                  {request.eligibilityStatus === 'CURRENTLY_BUSY' && `⏳ Currently Busy (~${request.estimatedWaitMinutes || 45}m)`}
+                  {request.eligibilityStatus === 'SKILLS_PENDING_REVIEW' && '⚠️ Skills Pending Review'}
+                  {request.eligibilityStatus === 'NO_QUALIFIED_MECHANIC' && '✕ No Qualified Mechanic'}
+                  {!['QUALIFIED_AND_FREE', 'CURRENTLY_BUSY', 'SKILLS_PENDING_REVIEW', 'NO_QUALIFIED_MECHANIC'].includes(request.eligibilityStatus) &&
+                    request.eligibilityStatus}
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500">
               Customer: {request.customer?.name || 'Customer'} ({request.customer?.phone || 'No phone'}) | Garage: {request.garage?.name || 'Garage'}
             </p>
+
+            {/* Powertrain & Derived Required Skills */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+              <span className="font-bold text-slate-500">Powertrain:</span>
+              <span className="px-2.5 py-0.5 rounded-lg bg-navy-100 text-navy-900 font-black text-[11px]">
+                {request.vehicle?.powertrain || 'PETROL'}
+              </span>
+              {request.requiredSkills && request.requiredSkills.length > 0 && (
+                <>
+                  <span className="text-slate-300">|</span>
+                  <span className="font-bold text-slate-500">Required Skills:</span>
+                  {request.requiredSkills.map((sk: string) => (
+                    <span
+                      key={sk}
+                      className="px-2 py-0.5 rounded-md bg-orange-100 text-brand-orange border border-orange-200 font-bold text-[10px]"
+                    >
+                      {sk}
+                    </span>
+                  ))}
+                </>
+              )}
+            </div>
+
+            {/* Reason Visibility Alert Banner */}
+            {request.unavailabilityReason && (
+              <div className="mt-3 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-black block uppercase tracking-wider text-[10px] text-amber-800">
+                    Verified Eligibility &amp; Capacity Note
+                  </span>
+                  <p className="font-semibold text-amber-950 mt-0.5">
+                    {request.unavailabilityReason}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {canReassign && (
@@ -679,16 +738,27 @@ export default function AdminRequestDetailPage() {
                       <div className="flex items-center gap-2">
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider ${
-                            isReassignment
+                            hist.action === 'INITIAL_VERIFIED_ASSIGNMENT' || hist.action === 'ASSIGNED'
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              : hist.action === 'FALLBACK_REROUTED'
+                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                              : hist.action === 'REJECTED_UNQUALIFIED' || hist.action === 'REJECTED_BUSY'
+                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                              : isReassignment
                               ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                              : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              : 'bg-slate-100 text-slate-800 border border-slate-200'
                           }`}
                         >
-                          {isReassignment ? 'Mechanic Reassigned' : 'Initial Assignment'}
+                          {hist.action || (isReassignment ? 'Mechanic Reassigned' : 'Initial Assignment')}
                         </span>
+                        {hist.checkResult && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-navy-100 text-navy-800 border border-navy-200">
+                            {hist.checkResult}
+                          </span>
+                        )}
                         <span className="text-slate-400">|</span>
                         <span className="font-semibold text-navy-900">
-                          {formatDate(hist.assignedAt)}
+                          {formatDate(hist.assignedAt || hist.createdAt)}
                         </span>
                       </div>
 

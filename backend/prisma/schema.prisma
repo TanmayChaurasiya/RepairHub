@@ -49,6 +49,17 @@ enum EmailNotificationType {
   GARAGE_APPROVAL
   GARAGE_REJECTION
   GENERAL
+  MECHANIC_CURRENTLY_BUSY
+  NO_QUALIFIED_MECHANIC
+}
+
+enum PowertrainType {
+  PETROL
+  DIESEL
+  ELECTRIC
+  HYBRID
+  CNG
+  OTHER
 }
 
 enum VehicleType {
@@ -170,6 +181,8 @@ model Garage {
   description       String?
   operatingHours    String?
   services          String[]             @default([])
+  supportedVehicleTypes VehicleType[]    @default([CAR, TWO_WHEELER, COMMERCIAL])
+  supportedPowertrains  PowertrainType[] @default([PETROL, DIESEL, ELECTRIC, HYBRID, CNG, OTHER])
   latitude          Float?               @default(26.4735)
   longitude         Float?               @default(80.3075)
   acceptsEmergency  Boolean              @default(true)
@@ -198,6 +211,7 @@ model MechanicProfile {
   garageId                 String
   skills                   String[]
   specialization           String?
+  skillsPendingReview      Boolean              @default(false)
   experienceYears          Int                  @default(0)
   available                Boolean              @default(true)
   availability             MechanicAvailability @default(AVAILABLE)
@@ -228,6 +242,8 @@ model Vehicle {
   make               String
   model              String
   year               Int
+  powertrain         PowertrainType      @default(PETROL)
+  fuelType           String?             @default("PETROL")
   regNo              String              @unique
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
@@ -250,6 +266,10 @@ model RepairRequest {
   diagnosis     String?
   photos        String[]        @default([])
   status        RequestStatus   @default(SUBMITTED)
+  eligibilityStatus    String?
+  unavailabilityReason String?
+  requiredSkills       String[]        @default([])
+  estimatedWaitMinutes Int?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
@@ -443,21 +463,40 @@ model AssignmentHistory {
   id                 String        @id @default(uuid())
   requestId          String
   previousMechanicId String?
-  newMechanicId      String
+  newMechanicId      String?
   assignedById       String
   assignedByRole     Role          @default(ADMIN)
+  action             String        @default("ASSIGNED")
+  checkResult        String?
   reason             String
   createdAt          DateTime      @default(now())
 
   request            RepairRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   previousMechanic   User?         @relation("PreviousMechanicAssignments", fields: [previousMechanicId], references: [id], onDelete: SetNull)
-  newMechanic        User          @relation("NewMechanicAssignments", fields: [newMechanicId], references: [id], onDelete: Cascade)
+  newMechanic        User?         @relation("NewMechanicAssignments", fields: [newMechanicId], references: [id], onDelete: SetNull)
   assignedBy         User          @relation("AssignedByHistories", fields: [assignedById], references: [id], onDelete: Cascade)
 
   @@index([requestId])
   @@index([assignedById])
   @@index([newMechanicId])
   @@index([createdAt])
+}
+
+model IssueSkillMapping {
+  id             String          @id @default(uuid())
+  category       RepairCategory
+  powertrain     PowertrainType?
+  issuePattern   String?
+  requiredSkills String[]
+  priority       Int             @default(0)
+  description    String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([category])
+  @@index([powertrain])
+  @@index([isActive])
 }
 
 model EmailNotification {

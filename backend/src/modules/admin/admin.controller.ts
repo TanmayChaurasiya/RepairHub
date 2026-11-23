@@ -1259,4 +1259,172 @@ export async function listAllAssignmentHistoriesAdmin(
   }
 }
 
+/**
+ * 24. List Issue-to-Skill Mappings
+ */
+export async function listIssueSkillMappingsAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const mappings = await prisma.issueSkillMapping.findMany({
+      orderBy: [{ priority: 'desc' }, { category: 'asc' }],
+    });
+    res.json({ mappings });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 25. Create Issue-to-Skill Mapping
+ */
+export async function createIssueSkillMappingAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { category, powertrain, issuePattern, requiredSkills, priority = 0, description } = req.body;
+
+    if (!category || !requiredSkills || !Array.isArray(requiredSkills) || requiredSkills.length === 0) {
+      res.status(400).json({ error: 'Category and at least one required skill are required.' });
+      return;
+    }
+
+    const mapping = await prisma.issueSkillMapping.create({
+      data: {
+        category,
+        powertrain: powertrain || null,
+        issuePattern: issuePattern ? String(issuePattern).trim().toLowerCase() : null,
+        requiredSkills: requiredSkills.map((s: string) => s.toUpperCase().trim()),
+        priority: parseInt(String(priority), 10) || 0,
+        description,
+        isActive: true,
+      },
+    });
+
+    res.status(201).json({ message: 'Issue skill mapping created successfully', mapping });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 26. Update Issue-to-Skill Mapping
+ */
+export async function updateIssueSkillMappingAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { category, powertrain, issuePattern, requiredSkills, priority, description, isActive } = req.body;
+
+    const mapping = await prisma.issueSkillMapping.update({
+      where: { id },
+      data: {
+        ...(category && { category }),
+        ...(powertrain !== undefined && { powertrain }),
+        ...(issuePattern !== undefined && { issuePattern: issuePattern ? String(issuePattern).trim().toLowerCase() : null }),
+        ...(requiredSkills && { requiredSkills: requiredSkills.map((s: string) => s.toUpperCase().trim()) }),
+        ...(priority !== undefined && { priority: parseInt(String(priority), 10) }),
+        ...(description !== undefined && { description }),
+        ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+      },
+    });
+
+    res.json({ message: 'Issue skill mapping updated successfully', mapping });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 27. Delete Issue-to-Skill Mapping
+ */
+export async function deleteIssueSkillMappingAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { id } = req.params;
+    await prisma.issueSkillMapping.delete({ where: { id } });
+    res.json({ message: 'Issue skill mapping removed successfully' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 28. List Mechanics Pending Skill Review
+ */
+export async function listMechanicsPendingReviewAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const mechanics = await prisma.mechanicProfile.findMany({
+      where: {
+        skillsPendingReview: true,
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, phone: true } },
+        garage: { select: { id: true, name: true, city: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ mechanics });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 29. Master Admin Tag Mechanic Skills & Resolve Pending Review
+ */
+export async function tagMechanicSkillsAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { skills, specialization } = req.body;
+
+    if (!skills || !Array.isArray(skills) || skills.length === 0) {
+      res.status(400).json({ error: 'At least one skill must be specified.' });
+      return;
+    }
+
+    const cleanSkills = skills.map((s: string) => s.toUpperCase().trim());
+
+    const updated = await prisma.mechanicProfile.update({
+      where: { userId: id },
+      data: {
+        skills: cleanSkills,
+        skillsPendingReview: false,
+        ...(specialization !== undefined && { specialization }),
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        garage: true,
+      },
+    });
+
+    res.json({
+      message: `Skills successfully tagged for ${updated.user.name}. Profile review complete.`,
+      mechanic: updated,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+
 

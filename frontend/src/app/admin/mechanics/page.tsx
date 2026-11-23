@@ -36,6 +36,12 @@ export default function AdminMechanicsPage() {
   const [detailMechanic, setDetailMechanic] = useState<any>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
 
+  // Tag Skills Modal for Mechanics Pending Review
+  const [tagModalOpen, setTagModalOpen] = useState(false);
+  const [taggingMechanic, setTaggingMechanic] = useState<any>(null);
+  const [taggingSkills, setTaggingSkills] = useState<string[]>([]);
+  const [taggingSubmitting, setTaggingSubmitting] = useState(false);
+
   const handleOpenMechanicDetail = async (id: string) => {
     try {
       setDrawerLoading(true);
@@ -163,6 +169,11 @@ export default function AdminMechanicsPage() {
   };
 
   const SKILL_OPTIONS = [
+    'EV_BATTERY',
+    'HIGH_VOLTAGE_ELECTRICAL',
+    'EV_MOTOR',
+    'HYBRID_POWERTRAIN',
+    'DIESEL_INJECTION',
     'ENGINE',
     'BRAKES',
     'ELECTRICAL',
@@ -171,6 +182,39 @@ export default function AdminMechanicsPage() {
     'GENERAL_SERVICE',
     'BODYWORK',
   ];
+
+  const handleOpenTagModal = (m: any) => {
+    setTaggingMechanic(m);
+    setTaggingSkills(m.skills || []);
+    setTagModalOpen(true);
+  };
+
+  const toggleTaggingSkill = (skill: string) => {
+    setTaggingSkills((prev) =>
+      prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]
+    );
+  };
+
+  const handleSaveTaggedSkills = async () => {
+    if (!taggingMechanic) return;
+    if (taggingSkills.length === 0) {
+      error('Please select at least one certified skill.');
+      return;
+    }
+    try {
+      setTaggingSubmitting(true);
+      await api.post(`/admin/mechanics/${taggingMechanic.userId || taggingMechanic.id}/tag-skills`, {
+        skills: taggingSkills,
+      });
+      success(`Skills successfully tagged for ${taggingMechanic.name}`);
+      setTagModalOpen(false);
+      fetchData();
+    } catch (err: any) {
+      error(err.message || 'Failed to update technician skills');
+    } finally {
+      setTaggingSubmitting(false);
+    }
+  };
 
   return (
     <AppLayout>
@@ -301,6 +345,11 @@ export default function AdminMechanicsPage() {
                       </td>
 
                       <td className="py-3.5 px-4 max-w-xs">
+                        {m.skillsPendingReview && (
+                          <span className="py-0.5 px-2 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-[9px] font-black uppercase tracking-wider block w-fit mb-1">
+                            ⚠️ Skills Pending Review
+                          </span>
+                        )}
                         <p className="font-bold text-navy-900 text-[11px] mb-1">
                           {m.specialization || 'General Technician'} ({m.experienceYears}y exp)
                         </p>
@@ -369,6 +418,14 @@ export default function AdminMechanicsPage() {
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          {m.skillsPendingReview && (
+                            <button
+                              onClick={() => handleOpenTagModal(m)}
+                              className="py-1 px-2.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-[10px] transition-colors border border-purple-200"
+                            >
+                              Tag Skills
+                            </button>
+                          )}
                           {m.status === 'ACTIVE' ? (
                             <button
                               onClick={() => handleSuspend(m.userId, m.name)}
@@ -765,6 +822,77 @@ export default function AdminMechanicsPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* Tag Skills Modal for Skills Pending Review */}
+      {tagModalOpen && taggingMechanic && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+                  <Wrench className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-navy-900">
+                    Tag Certified Skills: {taggingMechanic.name}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Resolves &quot;Skills Pending Review&quot; flag for Master Admin qualification verification
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setTagModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-slate-700 block">
+                Select All Verified Qualifications / Skills:
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {SKILL_OPTIONS.map((sk) => {
+                  const isChecked = taggingSkills.includes(sk);
+                  return (
+                    <button
+                      key={sk}
+                      type="button"
+                      onClick={() => toggleTaggingSkill(sk)}
+                      className={`p-2 rounded-xl text-xs font-bold text-left transition-all border ${
+                        isChecked
+                          ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="block">{sk}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setTagModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={taggingSubmitting}
+                onClick={handleSaveTaggedSkills}
+                className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-lg shadow-purple-600/25 transition-all disabled:opacity-50"
+              >
+                {taggingSubmitting ? 'Saving Skills...' : 'Confirm & Approve Skills'}
+              </button>
+            </div>
           </div>
         </div>
       )}

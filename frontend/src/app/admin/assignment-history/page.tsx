@@ -28,9 +28,11 @@ interface AssignmentHistoryItem {
   id: string;
   requestId: string;
   previousMechanicId: string | null;
-  newMechanicId: string;
+  newMechanicId: string | null;
   assignedById: string;
   assignedByRole: string;
+  action?: string;
+  checkResult?: string;
   reason: string;
   createdAt: string;
   request: {
@@ -67,7 +69,7 @@ interface AssignmentHistoryItem {
     name: string;
     email: string;
     phone: string;
-  };
+  } | null;
   assignedBy: {
     id: string;
     name: string;
@@ -187,8 +189,26 @@ export default function AdminAssignmentHistoryPage() {
                       <td className="py-4 px-4 font-mono font-bold text-navy-900">
                         <div className="space-y-1">
                           <span>{item.request?.requestNumber}</span>
-                          <div>
+                          <div className="flex flex-wrap gap-1">
                             <StatusBadge status={item.request?.status} />
+                            {item.action && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase bg-navy-100 text-navy-800 border border-navy-200">
+                                {item.action}
+                              </span>
+                            )}
+                            {item.checkResult && (
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  item.checkResult === 'QUALIFIED_AND_FREE'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : item.checkResult === 'CURRENTLY_BUSY'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-rose-100 text-rose-800'
+                                }`}
+                              >
+                                {item.checkResult}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -219,10 +239,14 @@ export default function AdminAssignmentHistoryPage() {
 
                           <ArrowRight className="w-4 h-4 text-brand-orange shrink-0" />
 
-                          <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-center min-w-[100px]">
-                            <span className="text-[10px] uppercase font-bold text-emerald-600 block">To</span>
+                          <div className={`p-2 rounded-xl border text-center min-w-[100px] ${
+                            item.newMechanic
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                              : 'bg-rose-50 border-rose-200 text-rose-800'
+                          }`}>
+                            <span className="text-[10px] uppercase font-bold block text-slate-400">To</span>
                             <strong className="text-xs truncate block max-w-[110px]">
-                              {item.newMechanic?.name}
+                              {item.newMechanic?.name || 'No Tech (Rejected)'}
                             </strong>
                           </div>
                         </div>

@@ -5,6 +5,11 @@ import { emitRequestUpdated, emitNotification } from '../socket.js';
 import { emailService } from '../email/mailer.js';
 import { logAudit } from '../audit/audit.service.js';
 import { env } from '../../config/env.js';
+import {
+  deriveRequiredSkills,
+  inferPowertrainFromVehicle,
+  checkMechanicQualification,
+} from '../qualification/qualification.service.js';
 
 export interface ReassignParams {
   requestId: string;
@@ -26,7 +31,9 @@ export interface ReassignmentEligibilityResult {
     garageName: string;
   } | null;
   eligibleMechanics: any[];
+  pendingReviewMechanics?: any[];
   disallowReason?: string;
+  requiredSkills?: string[];
 }
 
 /**
@@ -81,6 +88,14 @@ export async function getEligibleMechanicsForReassignment(
     };
   }
 
+  // Derive required skills based on vehicle powertrain and issue
+  const powertrain = inferPowertrainFromVehicle(request.vehicle);
+  const skillAnalysis = await deriveRequiredSkills(request.category, powertrain, request.description);
+  const requiredSkills =
+    request.requiredSkills && request.requiredSkills.length > 0
+      ? request.requiredSkills
+      : skillAnalysis.requiredSkills;
+
   // Fetch all active, available mechanics in the platform
   const mechanics = await prisma.mechanicProfile.findMany({
     where: {
@@ -103,57 +118,74 @@ export async function getEligibleMechanicsForReassignment(
     RequestStatus.QC,
   ];
 
-  // Map candidates and compute their current active workload
-  const candidates: MechanicCandidate[] = await Promise.all(
-    mechanics
-      // Exclude the currently assigned mechanic
-      .filter((m) => m.userId !== request.mechanicId)
-      .map(async (m) => {
-        const activeJobCount = await prisma.repairRequest.count({
-          where: {
-            mechanicId: m.userId,
-            status: { in: activeStatuses },
-          },
-        });
+  const pendingReviewMechanics: any[] = [];
+  const qualifiedCandidates: any[] = [];
 
-        return {
-          id: m.userId,
-          name: m.user.name,
-          rating: m.rating,
-          skills: m.skills,
-          available: m.available && m.availability === MechanicAvailability.AVAILABLE,
-          garageVerified: m.garage.isVerified,
-          garageCity: m.garage.city,
-          activeJobCount,
-        };
-      })
-  );
+  for (const m of mechanics) {
+    if (m.userId === request.mechanicId) continue; // Exclude currently assigned mechanic
 
-  // Score and rank candidates based on skill match, rating, and workload penalty
-  const ranked = rankMechanicsForRequest(request.category, candidates, request.garage.city);
+    const qual = checkMechanicQualification(m, requiredSkills);
+    if (qual.isPendingReview) {
+      pendingReviewMechanics.push({
+        mechanicId: m.userId,
+        name: m.user.name,
+        email: m.user.email,
+        phone: m.user.phone,
+        garageName: m.garage.name,
+        garageCity: m.garage.city,
+        skills: m.skills,
+        skillsPendingReview: true,
+      });
+      continue;
+    }
 
-  // Attach full profile information for rich UI display in admin dialog
-  const enrichedEligible = ranked.map((r) => {
-    const profile = mechanics.find((m) => m.userId === r.mechanicId);
-    return {
-      ...r,
-      email: profile?.user.email,
-      phone: profile?.user.phone,
-      garageId: profile?.garage.id,
-      garageName: profile?.garage.name,
-      garageCity: profile?.garage.city,
-      specialization: profile?.specialization,
-      experienceYears: profile?.experienceYears,
-      skills: profile?.skills || [],
-      availability: profile?.availability || 'AVAILABLE',
-    };
-  });
+    if (!qual.isQualified) {
+      // Unrelated/unqualified mechanic strictly excluded from eligible list
+      continue;
+    }
+
+    const activeJobCount = await prisma.repairRequest.count({
+      where: {
+        mechanicId: m.userId,
+        status: { in: activeStatuses },
+      },
+    });
+
+    const score = m.rating * 1.0 - activeJobCount * 0.5;
+
+    qualifiedCandidates.push({
+      mechanicId: m.userId,
+      name: m.user.name,
+      email: m.user.email,
+      phone: m.user.phone,
+      rating: m.rating,
+      skills: m.skills,
+      garageId: m.garage.id,
+      garageName: m.garage.name,
+      garageCity: m.garage.city,
+      specialization: m.specialization,
+      experienceYears: m.experienceYears,
+      activeJobCount,
+      score,
+      scoreBreakdown: { baseRating: m.rating, workloadPenalty: activeJobCount * 0.5 },
+      reasons: [
+        `Verified qualified in: ${requiredSkills.join(', ')}`,
+        `Rating: ${m.rating.toFixed(1)} / 5.0`,
+        `Active jobs: ${activeJobCount}`,
+      ],
+      availability: m.availability,
+    });
+  }
+
+  qualifiedCandidates.sort((a, b) => b.score - a.score);
 
   return {
     reassignmentAllowed: true,
     currentStatus: request.status,
     currentMechanic,
-    eligibleMechanics: enrichedEligible,
+    eligibleMechanics: qualifiedCandidates,
+    pendingReviewMechanics,
+    requiredSkills,
   };
 }
 
@@ -241,6 +273,23 @@ export async function executeMechanicReassignment({
     throw error;
   }
 
+  // 4b. Verify mechanic qualification for the vehicle and reported problem
+  const powertrain = inferPowertrainFromVehicle(request.vehicle);
+  const skillAnalysis = await deriveRequiredSkills(request.category, powertrain, request.description);
+  const requiredSkills =
+    request.requiredSkills && request.requiredSkills.length > 0
+      ? request.requiredSkills
+      : skillAnalysis.requiredSkills;
+
+  const qual = checkMechanicQualification(newMechanicUser.mechanicProfile, requiredSkills);
+  if (!qual.isQualified) {
+    const error: any = new Error(
+      `Target mechanic does not possess the required repair skills: ${requiredSkills.join(', ')}. (Missing: ${qual.missingSkills.join(', ')})`
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
   const previousMechanicId = request.mechanicId;
   const previousMechanicName = request.mechanic?.name || 'Unassigned';
   const newMechanicName = newMechanicUser.name;
@@ -252,7 +301,10 @@ export async function executeMechanicReassignment({
       where: { id: requestId },
       data: {
         mechanicId: newMechanicId,
+        garageId: newMechanicUser.mechanicProfile?.garageId || request.garageId,
         status: RequestStatus.ASSIGNED, // Keep in ASSIGNED state
+        eligibilityStatus: 'QUALIFIED_AND_FREE',
+        unavailabilityReason: null,
       },
       include: {
         garage: true,
@@ -270,6 +322,8 @@ export async function executeMechanicReassignment({
         newMechanicId,
         assignedById: adminId,
         assignedByRole: adminRole,
+        action: 'REASSIGNED',
+        checkResult: 'PASS',
         reason: reason.trim(),
       },
     });
